@@ -53,19 +53,15 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      - name: List Services
-        run: |
-          echo "Listing available services:"
-          railway service
+      - name: Check Project Status
+        run: railway status --json
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
       - name: Deploy to Railway
         working-directory: ./backend
-        run: |
-          echo "Attempting to deploy with service name: Backend"
-          railway up -s Backend || railway up -s backend
+        run: railway up -s Backend --json
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

@@ -31,7 +31,21 @@ jobs:
       - name: Install Global Dependencies
         run: bun add medusajs-launch-utils@latest -g
 
-      - name: Deploy to Railway
-        run: railway up --service backend
+      - name: Verify Token
+        run: |
+          echo "Token length: ${#RAILWAY_TOKEN}"
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN is empty"
+            exit 1
+          else
+            echo "RAILWAY_TOKEN is set (masked for security)"
+          fi
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} 
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Deploy to Railway
+        working-directory: ./backend
+        run: railway up --config railway.toml
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          CI: true 

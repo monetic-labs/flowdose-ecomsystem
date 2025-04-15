@@ -3,10 +3,28 @@
   "monorepo": true,
   "services": {
     "backend": {
-      "path": "backend"
+      "path": "backend",
+      "triggers": [
+        {
+          "type": "github",
+          "provider": "github",
+          "enabled": true,
+          "autoDeployEnabled": true,
+          "watchPaths": ["backend/**"]
+        }
+      ]
     },
     "storefront": {
-      "path": "storefront"
+      "path": "storefront",
+      "triggers": [
+        {
+          "type": "github",
+          "provider": "github",
+          "enabled": true,
+          "autoDeployEnabled": true,
+          "watchPaths": ["storefront/**"]
+        }
+      ]
     }
   }
 } 

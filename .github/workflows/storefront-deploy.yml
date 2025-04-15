@@ -53,11 +53,11 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      # Deploy the storefront directly with path specified as positional argument
+      # Deploy the storefront with both service flag and directory path
       - name: Deploy Storefront
         run: |
-          # Deploy from the storefront directory explicitly
-          cd storefront && railway up . -d
+          # Deploy from the storefront directory explicitly to the Storefront service
+          cd storefront && railway up . --service Storefront -d
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

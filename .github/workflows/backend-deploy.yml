@@ -78,11 +78,11 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      # Deploy the backend directly with path specified as positional argument
+      # Deploy the backend with both service flag and directory path
       - name: Deploy Backend
         run: |
-          # Deploy from the backend directory explicitly
-          cd backend && railway up . -d
+          # Deploy from the backend directory explicitly to the Backend service
+          cd backend && railway up . --service Backend -d
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

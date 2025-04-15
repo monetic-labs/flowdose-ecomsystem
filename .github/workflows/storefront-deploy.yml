@@ -15,10 +15,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-
       - name: Deploy to Railway
-        run: railway up --service storefront
+        uses: railway/cli-action@master
+        with:
+          service: storefront
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} 

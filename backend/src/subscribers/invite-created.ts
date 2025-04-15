@@ -15,6 +15,8 @@ export default async function userInviteHandler({
   const userModuleService: IUserModuleService = container.resolve(Modules.USER)
   const invite = await userModuleService.retrieveInvite(data.id)
 
+  console.log(`Processing invitation for ${invite.email} with token ${invite.token}`)
+
   try {
     await notificationModuleService.createNotifications({
       to: invite.email,
@@ -22,15 +24,16 @@ export default async function userInviteHandler({
       template: EmailTemplates.INVITE_USER,
       data: {
         emailOptions: {
-          replyTo: 'info@example.com',
+          replyTo: 'devinjelliot@gmail.com',
           subject: "You've been invited to Medusa!"
         },
         inviteLink: `${BACKEND_URL}/app/invite?token=${invite.token}`,
         preview: 'The administration dashboard awaits...'
       }
     })
+    console.log(`Successfully sent invite email to ${invite.email}`)
   } catch (error) {
-    console.error(error)
+    console.error(`Failed to send invite email to ${invite.email}:`, error)
   }
 }
 

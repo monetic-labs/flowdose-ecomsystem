@@ -24,6 +24,9 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
         
+      - name: Check Railway CLI Version
+        run: railway --version
+        
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -53,14 +56,16 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      - name: Check Project Status
-        run: railway status --json
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+      - name: List Directory Contents
+        run: |
+          echo "Current working directory: $(pwd)"
+          echo "Contents of repository root:"
+          ls -la
+          echo "Contents of backend directory:"
+          ls -la backend/
 
       - name: Deploy to Railway
-        run: railway up -s Backend --json ./backend
+        run: cd backend && railway up -s Backend
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

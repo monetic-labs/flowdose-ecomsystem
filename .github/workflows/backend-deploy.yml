@@ -55,22 +55,34 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
-
-      - name: Prepare Backend for Deployment
-        run: |
-          # Create a deploy directory
-          mkdir -p /tmp/railway-deploy
           
-          # Copy all backend files to the deploy directory
-          cp -r backend/* /tmp/railway-deploy/
+      - name: Check Project Status
+        run: railway status --json
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
           
-          echo "Contents of deploy directory:"
-          ls -la /tmp/railway-deploy/
-
-      - name: Deploy to Railway
+      - name: List Available Services
         run: |
-          cd /tmp/railway-deploy
-          railway up -s Backend -d --verbose
+          echo "Attempting to list all services in project..."
+          # Using a trick to output service list without interactive prompt
+          echo '{"projectId":"$RAILWAY_PROJECT_ID"}' > railway.json
+          railway service --json || echo "Service listing failed but continuing..."
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          
+      - name: Check Backend Service Variables
+        run: railway variables -s Backend --json || echo "Variable listing failed but continuing..."
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+
+      # Deploy the backend directly with specific output path
+      - name: Deploy Backend with Source Path Flag
+        run: |
+          # Deploy from the backend directory explicitly
+          cd backend && railway up -d --source=.
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

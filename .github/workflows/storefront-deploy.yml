@@ -53,21 +53,11 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      - name: Prepare Storefront for Deployment
+      # Deploy the storefront directly with specific output path
+      - name: Deploy Storefront with Source Path Flag
         run: |
-          # Create a deploy directory
-          mkdir -p /tmp/railway-deploy
-          
-          # Copy all storefront files to the deploy directory
-          cp -r storefront/* /tmp/railway-deploy/
-          
-          echo "Contents of deploy directory:"
-          ls -la /tmp/railway-deploy/
-
-      - name: Deploy to Railway
-        run: |
-          cd /tmp/railway-deploy
-          railway up -s Storefront -d --verbose
+          # Deploy from the storefront directory explicitly
+          cd storefront && railway up -d --source=.
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

@@ -53,16 +53,21 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
-      - name: List Directory Contents
+      - name: Prepare Storefront for Deployment
         run: |
-          echo "Current working directory: $(pwd)"
-          echo "Contents of repository root:"
-          ls -la
-          echo "Contents of storefront directory:"
-          ls -la storefront/
+          # Create a deploy directory
+          mkdir -p /tmp/railway-deploy
+          
+          # Copy all storefront files to the deploy directory
+          cp -r storefront/* /tmp/railway-deploy/
+          
+          echo "Contents of deploy directory:"
+          ls -la /tmp/railway-deploy/
 
       - name: Deploy to Railway
-        run: cd storefront && railway up -s Storefront
+        run: |
+          cd /tmp/railway-deploy
+          railway up -s Storefront -d --verbose
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

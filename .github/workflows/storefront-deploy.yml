@@ -50,9 +50,16 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
+      - name: Link Service
+        working-directory: ./storefront
+        run: railway link --project $RAILWAY_PROJECT_ID --environment production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+
       - name: Deploy to Railway
         working-directory: ./storefront
-        run: railway up -s storefront
+        run: railway up -s Storefront
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

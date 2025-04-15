@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "monorepo": true,
+  "services": {
+    "backend": {
+      "path": "backend"
+    },
+    "storefront": {
+      "path": "storefront"
+    }
+  }
+} 

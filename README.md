@@ -101,3 +101,34 @@ Rename `.env.local.template` ->  `.env.local`
     </div>
   </a>
 </p>
+
+## Railway Deployment
+
+This is a monorepo project with both backend and storefront configured for Railway deployment.
+
+### Commit Changes
+
+When committing changes to trigger Railway builds:
+
+1. **For backend changes only**:
+   ```
+   git add backend/
+   git commit -m "backend: your commit message"
+   git push
+   ```
+
+2. **For storefront changes only**:
+   ```
+   git add storefront/
+   git commit -m "storefront: your commit message"
+   git push
+   ```
+
+3. **For changes to both**:
+   ```
+   git add .
+   git commit -m "all: your commit message"
+   git push
+   ```
+
+Railway is configured to detect which service to build based on the changes in each commit.

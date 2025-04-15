@@ -2,10 +2,10 @@
 nixpkgs = ["bun"]
 
 [phases.install]
-cmds = ["bun install"]
+cmds = ["bun install", "bun add medusajs-launch-utils@latest -g"]
 
 [phases.build]
-cmds = ["bun run build"]
+cmds = ["bun run build", "mkdir -p .medusa/server", "cp medusa-config.js .medusa/server/"]
 
 [start]
 cmd = "bun start" 

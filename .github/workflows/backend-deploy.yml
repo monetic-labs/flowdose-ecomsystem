@@ -24,7 +24,7 @@ jobs:
         run: bun add medusajs-launch-utils@latest -g
 
       - name: Deploy to Railway
-        uses: railway/cli-action@master
+        uses: bervProject/railway-deploy@main
         with:
           service: backend
         env:

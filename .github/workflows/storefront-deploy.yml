@@ -7,6 +7,7 @@ on:
     paths:
       - 'storefront/**'
       - '.github/workflows/storefront-deploy.yml'
+      - 'railway-deploy.trigger'
 
 jobs:
   deploy:
@@ -14,10 +15,46 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Verify Token and Project ID
+        run: |
+          echo "Token length: ${#RAILWAY_TOKEN}"
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN is empty"
+            exit 1
+          else
+            echo "RAILWAY_TOKEN is set (masked for security)"
+          fi
+          
+          echo "Project ID: $RAILWAY_PROJECT_ID"
+          if [ -z "$RAILWAY_PROJECT_ID" ]; then
+            echo "RAILWAY_PROJECT_ID is empty"
+            exit 1
+          else
+            echo "RAILWAY_PROJECT_ID is set"
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
       - name: Deploy to Railway
-        uses: railway/cli-action@master
-        with:
-          service: storefront
+        working-directory: ./storefront
+        run: railway up
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} 
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          RAILWAY_SERVICE_NAME: "storefront"
+          CI: true 

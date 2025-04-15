@@ -60,8 +60,7 @@ jobs:
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
 
       - name: Deploy to Railway
-        working-directory: ./backend
-        run: railway up -s Backend --json
+        run: railway up -s Backend --json ./backend
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"

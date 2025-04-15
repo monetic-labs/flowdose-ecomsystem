@@ -10,9 +10,9 @@
   "scripts": {
     "wait": "await-backend",
     "launcher": "launch-storefront",
-    "dev": "npm run wait && npm run launcher dev",
-    "build": "npm run wait && npm run launcher build",
-    "start": "npm run launcher start",
+    "dev": "bun run wait && bun run launcher dev",
+    "build": "bun run wait && bun run launcher build",
+    "start": "bun run launcher start",
     "build:next": "next build",
     "lint": "next lint",
     "analyze": "ANALYZE=true next build",
@@ -68,5 +68,9 @@
     "prettier": "^2.8.8",
     "tailwindcss": "^3.0.23",
     "typescript": "^5.3.2"
+  },
+  "packageManager": "bun@1.1.10",
+  "engines": {
+    "node": "18.x || 20.x || 22.x"
   }
 }

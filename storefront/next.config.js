@@ -22,7 +22,8 @@ const nextConfig = {
       },
       { // Note: needed to serve images from /public folder
         protocol: process.env.NEXT_PUBLIC_BASE_URL?.startsWith('https') ? 'https' : 'http',
-        hostname: process.env.NEXT_PUBLIC_BASE_URL?.replace(/^https?:\/\//, ''),
+        // Temporarily hardcode hostname for build if ENV var is missing
+        hostname: process.env.NEXT_PUBLIC_BASE_URL?.replace(/^https?:\/\//, '') || '143.110.144.17',
       },
       { // Note: only needed when using local-file for product media
         protocol: "https",

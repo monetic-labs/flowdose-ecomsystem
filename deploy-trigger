@@ -1,7 +1,7 @@
-DEPLOY_TRIGGER=3
+DEPLOY_TRIGGER=4
 # Change this number and commit to force a deployment without changing any files in backend or storefront
 # Last updated: 2025-04-16
 # This file is used to trigger deployments
 # Update the timestamp below to trigger a deployment
-LAST_DEPLOY=2025-04-16T04:10:00Z
+LAST_DEPLOY=2025-04-16T04:30:00Z
 # This file is used to trigger deployments to DigitalOcean 

@@ -1,24 +1,29 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
 # Set environment variables
 ENV NODE_ENV=production
 
-# Install pnpm and ts-node
-RUN npm install -g pnpm ts-node
+# Install pnpm
+RUN npm install -g pnpm
 
-# Copy package.json first
-COPY package.json ./
+# Copy package.json and install dependencies
+COPY package.json .npmrc* ./
+RUN pnpm install --frozen-lockfile
 
-# Install express for our simple server
-RUN pnpm add express
+# Copy the rest of the application
+COPY . .
 
-# Copy our simple startup script
-COPY start.js ./
+# Build the application
+RUN pnpm build
 
-# Expose the application port
+# Create required directories
+RUN mkdir -p .medusa/server
+RUN cp -f medusa-config.js .medusa/server/
+
+# Expose port
 EXPOSE 9000
 
-# Start using our simple server script instead of Medusa
-CMD ["node", "start.js"] 
+# Start the Medusa server
+CMD ["pnpm", "start"] 

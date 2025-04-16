@@ -6,10 +6,13 @@ This project is set up to automatically deploy to DigitalOcean droplets using Gi
 
 The infrastructure consists of:
 
-- **Backend Droplet**: 137.184.81.212 (Port 9000)
-- **Storefront Droplet**: 143.110.144.17 (Port 3000)
+- **Backend Droplet**: 24.144.87.68 (Port 9000)
+- **Storefront Droplet**: 165.232.157.66 (Port 3000)
 - **PostgreSQL Database**: postgres-flowdose-do-user-17309531-0.k.db.ondigitalocean.com
 - **Redis Database**: redis-flowdose-do-user-17309531-0.k.db.ondigitalocean.com
+- **Domain**: flowdose.xyz
+  - **Admin/Backend**: https://admin.flowdose.xyz
+  - **Storefront**: https://store.flowdose.xyz
 
 ## Automated Deployment
 
@@ -27,20 +30,20 @@ If needed, you can deploy manually by SSHing into the droplets:
 
 ```bash
 # For backend
-ssh -i ~/.ssh/digitalocean_key root@137.184.81.212
+ssh -i ~/.ssh/flowdose-do root@24.144.87.68
 cd /opt/flowdose
 git pull
-docker-compose -f docker-compose.backend.yml down
-docker-compose -f docker-compose.backend.yml build --no-cache
-docker-compose -f docker-compose.backend.yml up -d
+docker compose -f docker-compose.backend.yml down
+docker compose -f docker-compose.backend.yml build --no-cache
+docker compose -f docker-compose.backend.yml up -d
 
 # For storefront
-ssh -i ~/.ssh/digitalocean_key root@143.110.144.17
+ssh -i ~/.ssh/flowdose-do root@165.232.157.66
 cd /opt/flowdose
 git pull
-docker-compose -f docker-compose.storefront.yml down
-docker-compose -f docker-compose.storefront.yml build --no-cache
-docker-compose -f docker-compose.storefront.yml up -d
+docker compose -f docker-compose.storefront.yml down
+docker compose -f docker-compose.storefront.yml build --no-cache
+docker compose -f docker-compose.storefront.yml up -d
 ```
 
 ## Triggering a Deployment

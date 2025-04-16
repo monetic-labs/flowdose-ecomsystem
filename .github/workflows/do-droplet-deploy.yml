@@ -26,25 +26,25 @@ jobs:
       - name: Adding Known Hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H 137.184.81.212 >> ~/.ssh/known_hosts
-          ssh-keyscan -H 143.110.144.17 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 24.144.87.68 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 165.232.157.66 >> ~/.ssh/known_hosts
       
       - name: Deploy Backend
         run: |
-          ssh -o StrictHostKeyChecking=no root@137.184.81.212 '
+          ssh -o StrictHostKeyChecking=no root@24.144.87.68 '
             cd /opt/flowdose && 
             git pull &&
-            docker-compose -f docker-compose.backend.yml down &&
-            docker-compose -f docker-compose.backend.yml build --no-cache &&
-            docker-compose -f docker-compose.backend.yml up -d
+            docker compose -f docker-compose.backend.yml down &&
+            docker compose -f docker-compose.backend.yml build --no-cache &&
+            docker compose -f docker-compose.backend.yml up -d
           '
         
       - name: Deploy Storefront
         run: |
-          ssh -o StrictHostKeyChecking=no root@143.110.144.17 '
+          ssh -o StrictHostKeyChecking=no root@165.232.157.66 '
             cd /opt/flowdose && 
             git pull &&
-            docker-compose -f docker-compose.storefront.yml down &&
-            docker-compose -f docker-compose.storefront.yml build --no-cache &&
-            docker-compose -f docker-compose.storefront.yml up -d
+            docker compose -f docker-compose.storefront.yml down &&
+            docker compose -f docker-compose.storefront.yml build --no-cache &&
+            docker compose -f docker-compose.storefront.yml up -d
           ' 

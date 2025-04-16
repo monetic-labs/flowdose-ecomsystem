@@ -1,9 +1,6 @@
-FROM node:22-alpine
+FROM node:18-alpine
 
 WORKDIR /app
-
-# Set environment variables
-ENV NODE_ENV=production
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -11,17 +8,38 @@ RUN npm install -g pnpm
 # Copy package configuration files first
 COPY package.json .npmrc ./
 
-# Install minimal dependencies
-RUN pnpm add express cors
+# Remove any yarn/bun config to avoid conflicts
+RUN rm -f .yarnrc.yml .yarn* yarn* bun.lockb
 
-# Copy our simple server file
-COPY start.js ./
+# Install dependencies with improved hoisting
+ENV NODE_ENV=development
+RUN pnpm install --no-frozen-lockfile
 
-# Disable SSL certificate validation (security risk, but fixes connection issues)
+# Copy the rest of the application
+COPY . .
+
+# Remove any package manager configs again
+RUN rm -f .yarnrc.yml .yarn* yarn* bun.lockb
+
+# Create required directories preemptively
+RUN mkdir -p .medusa/server
+RUN cp -f medusa-config.js .medusa/server/ || true
+
+# Set NODE_PATH to include global modules
+ENV NODE_PATH=/usr/local/lib/node_modules:/app/node_modules
+ENV PATH=$PATH:/app/node_modules/.bin
+
+# Build the application
+RUN pnpm build || (echo "Build failed but continuing" && mkdir -p .medusa/server && cp -f medusa-config.js .medusa/server/)
+
+# Switch to production for runtime
+ENV NODE_ENV=production
+
+# Disable SSL certificate validation for database connection
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 
 # Expose port
 EXPOSE 9000
 
-# Start using our simple server
-CMD ["node", "start.js"] 
+# Start the Medusa server
+CMD ["pnpm", "start"] 

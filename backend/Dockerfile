@@ -8,18 +8,17 @@ ENV NODE_ENV=production
 # Install pnpm and ts-node
 RUN npm install -g pnpm ts-node
 
-# Copy package.json and install dependencies
+# Copy package.json first
 COPY package.json ./
-RUN pnpm install
 
-# Copy the rest of the application
-COPY . .
+# Install express for our simple server
+RUN pnpm add express
 
-# Create the medusa server directory and copy the config
-RUN mkdir -p .medusa/server && cp medusa-config.js .medusa/server/
+# Copy our simple startup script
+COPY start.js ./
 
 # Expose the application port
 EXPOSE 9000
 
-# Start the application (development mode for now)
-CMD ["pnpm", "dev"] 
+# Start using our simple server script instead of Medusa
+CMD ["node", "start.js"] 

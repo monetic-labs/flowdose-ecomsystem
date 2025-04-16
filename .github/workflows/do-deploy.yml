@@ -1,0 +1,27 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**'
+      - 'storefront/**'
+      - '.github/workflows/do-deploy.yml'
+      - 'app-spec.yaml'
+      - 'deploy-trigger'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      
+      - name: Deploy App to DO
+        run: doctl apps update ${{ secrets.DO_APP_ID }} --spec app-spec.yaml 

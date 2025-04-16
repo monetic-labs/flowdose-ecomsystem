@@ -1,0 +1,4 @@
+DEPLOY_TRIGGER=1
+# Change this number and commit to force a deployment without changing any files in backend or storefront
+# Last updated: 2024-04-16
+# This file is used to trigger deployments to DigitalOcean 

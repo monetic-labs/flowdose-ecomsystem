@@ -33,3 +33,18 @@ pids
 .vscode
 *.swp
 *.swo
+
+# Terraform files
+*.tfstate
+*.tfstate.backup
+*.tfvars
+terraform.tfvars
+infra/*.tfvars
+infra/.terraform/
+.terraform/
+.terraform.lock.hcl
+infra/.terraform.lock.hcl
+
+# Local secrets
+secrets/
+credentials/

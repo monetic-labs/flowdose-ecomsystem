@@ -1,6 +1,51 @@
-# DigitalOcean Deployment Plan
+# DigitalOcean Deployment
 
-This document outlines the plan for deploying the Flowdose Ecomsystem to DigitalOcean App Platform.
+This project is set up to automatically deploy to DigitalOcean droplets using GitHub Actions.
+
+## Infrastructure
+
+The infrastructure consists of:
+
+- **Backend Droplet**: 137.184.81.212 (Port 9000)
+- **Storefront Droplet**: 143.110.144.17 (Port 3000)
+- **PostgreSQL Database**: postgres-flowdose-do-user-17309531-0.k.db.ondigitalocean.com
+- **Redis Database**: redis-flowdose-do-user-17309531-0.k.db.ondigitalocean.com
+
+## Automated Deployment
+
+Deployments are automated via GitHub Actions. The workflow is defined in `.github/workflows/do-droplet-deploy.yml`.
+
+The workflow does the following:
+1. Triggers when changes are pushed to `master` branch (for backend, storefront, or the workflow itself)
+2. SSHs into both droplets
+3. Pulls the latest code
+4. Rebuilds and restarts the Docker containers
+
+## Manual Deployment
+
+If needed, you can deploy manually by SSHing into the droplets:
+
+```bash
+# For backend
+ssh -i ~/.ssh/digitalocean_key root@137.184.81.212
+cd /opt/flowdose
+git pull
+docker-compose -f docker-compose.backend.yml down
+docker-compose -f docker-compose.backend.yml build --no-cache
+docker-compose -f docker-compose.backend.yml up -d
+
+# For storefront
+ssh -i ~/.ssh/digitalocean_key root@143.110.144.17
+cd /opt/flowdose
+git pull
+docker-compose -f docker-compose.storefront.yml down
+docker-compose -f docker-compose.storefront.yml build --no-cache
+docker-compose -f docker-compose.storefront.yml up -d
+```
+
+## Triggering a Deployment
+
+To trigger a deployment without changing backend or storefront code, update the timestamp in the `deploy-trigger` file and commit.
 
 ## Infrastructure Components
 

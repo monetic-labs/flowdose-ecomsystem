@@ -1,0 +1,50 @@
+name: Deploy to DigitalOcean Droplets
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**'
+      - 'storefront/**'
+      - '.github/workflows/do-droplet-deploy.yml'
+      - 'deploy-trigger'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          known_hosts: 'just-a-placeholder'
+          
+      - name: Adding Known Hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 137.184.81.212 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 143.110.144.17 >> ~/.ssh/known_hosts
+      
+      - name: Deploy Backend
+        run: |
+          ssh -o StrictHostKeyChecking=no root@137.184.81.212 '
+            cd /opt/flowdose && 
+            git pull &&
+            docker-compose -f docker-compose.backend.yml down &&
+            docker-compose -f docker-compose.backend.yml build --no-cache &&
+            docker-compose -f docker-compose.backend.yml up -d
+          '
+        
+      - name: Deploy Storefront
+        run: |
+          ssh -o StrictHostKeyChecking=no root@143.110.144.17 '
+            cd /opt/flowdose && 
+            git pull &&
+            docker-compose -f docker-compose.storefront.yml down &&
+            docker-compose -f docker-compose.storefront.yml build --no-cache &&
+            docker-compose -f docker-compose.storefront.yml up -d
+          ' 

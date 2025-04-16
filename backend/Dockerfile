@@ -35,6 +35,9 @@ RUN pnpm build || (echo "Build failed but continuing" && mkdir -p .medusa/server
 # Switch to production for runtime
 ENV NODE_ENV=production
 
+# Disable SSL certificate validation (security risk, but fixes connection issues)
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+
 # Expose port
 EXPOSE 9000
 

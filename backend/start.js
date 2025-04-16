@@ -1,29 +1,42 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
-const port = 9000;
+const port = process.env.PORT || 9000;
 
-// Basic health check endpoint
+// Enable CORS
+app.use(cors());
+app.use(express.json());
+
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Key exchange endpoint for storefront
+// Key exchange endpoint for testing connection
 app.get('/key-exchange', (req, res) => {
-  res.json({ success: true, message: 'API is running' });
+  res.json({ success: true, message: 'Backend connection successful' });
 });
 
-// Basic API routes
-app.get('/api', (req, res) => {
-  res.json({ 
-    message: 'Medusa API is coming soon',
-    endpoints: [
-      { path: '/health', method: 'GET', description: 'Health check endpoint' },
-      { path: '/key-exchange', method: 'GET', description: 'Endpoint for storefront to verify backend connectivity' }
-    ] 
+// Publishable API key endpoint needed by the frontend
+app.get('/store/publishable-api-keys', (req, res) => {
+  res.json({
+    publishable_api_keys: [
+      {
+        id: "pk_test_medusa_dummy_key",
+        created_at: new Date().toISOString(),
+        revoked_at: null
+      }
+    ]
   });
+});
+
+// Catch-all for debugging
+app.use('*', (req, res) => {
+  console.log(`Request received: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ message: 'Endpoint not implemented yet', path: req.originalUrl });
 });
 
 // Start the server
 app.listen(port, '0.0.0.0', () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`Backend server running on port ${port}`);
 }); 

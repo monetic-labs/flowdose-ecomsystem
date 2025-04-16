@@ -12,8 +12,8 @@ RUN npm install -g pnpm
 COPY package.json .npmrc* ./
 RUN pnpm install
 
-# Ensure TypeScript is installed
-RUN pnpm add -D typescript
+# Ensure TypeScript is installed as a production dependency
+RUN pnpm add typescript
 
 # Copy the rest of the application
 COPY . .

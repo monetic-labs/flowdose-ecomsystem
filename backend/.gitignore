@@ -1,5 +1,6 @@
 /dist
 .env
+.env.production
 .DS_Store
 /uploads
 /node_modules
@@ -26,3 +27,7 @@ build
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+.env.production
+.env.staging
+.env.development

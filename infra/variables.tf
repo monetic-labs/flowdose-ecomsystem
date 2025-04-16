@@ -10,6 +10,12 @@ variable "ssh_public_key" {
   default     = ""
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to the SSH private key file"
+  type        = string
+  default     = "~/.ssh/id_rsa"
+}
+
 variable "environment" {
   description = "Environment (staging or production)"
   type        = string
@@ -56,6 +62,26 @@ variable "domain_name" {
   description = "Domain name for the application (leave empty if not using custom domain)"
   type        = string
   default     = ""
+}
+
+variable "admin_email_for_certs" {
+  description = "Email address for Let's Encrypt certificate notifications"
+  type        = string
+  default     = "admin@flowdose.xyz"
+}
+
+variable "jwt_secret" {
+  description = "Secret key for JWT authentication"
+  type        = string
+  sensitive   = true
+  default     = "yltngu81855enl52rx59dz590a29guap" # This is from .env.production but should be changed
+}
+
+variable "cookie_secret" {
+  description = "Secret key for cookie encryption"
+  type        = string
+  sensitive   = true
+  default     = "b6v2yh3c2qsh82f7559z4ovxlttpwitr" # This is from .env.production but should be changed
 }
 
 variable "postgres_host" {

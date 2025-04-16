@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://username:password@hostname:port/database?sslmode=require
+      - REDIS_URL=rediss://default:password@hostname:port
+      - PORT=9000
+      - ADMIN_CORS=https://admin.yourdomain.com,https://yourdomain.com
+      - STORE_CORS=https://store.yourdomain.com
+      - AUTH_CORS=https://admin.yourdomain.com,https://yourdomain.com
+    ports:
+      - "9000:9000"
+    restart: always 

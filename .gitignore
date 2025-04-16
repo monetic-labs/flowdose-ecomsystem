@@ -7,6 +7,7 @@ node_modules
 !.env.example
 !.env.template
 !.env.local.template
+!**/.env.*.example
 
 # Build directories
 dist
@@ -44,6 +45,14 @@ infra/.terraform/
 .terraform/
 .terraform.lock.hcl
 infra/.terraform.lock.hcl
+
+# Deployment scripts with secrets
+infra/deploy.sh
+!infra/deploy.sh.example
+
+# Docker Compose files with potential secrets
+docker-compose.*.yml
+!docker-compose.*.yml.example
 
 # Local secrets
 secrets/

@@ -5,8 +5,8 @@ WORKDIR /app
 # Set environment variables
 ENV NODE_ENV=production
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm and ts-node
+RUN npm install -g pnpm ts-node
 
 # Copy package.json and install dependencies
 COPY package.json ./

@@ -23,42 +23,48 @@ jobs:
           
       - name: Install Railway CLI
         run: npm install -g @railway/cli
-        
-      - name: Check Railway CLI Version
-        run: railway --version
-        
+          
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      - name: Verify Token and Project ID
+      - name: Create Clean Deployment Directory
         run: |
-          echo "Token length: ${#RAILWAY_TOKEN}"
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_TOKEN is empty"
-            exit 1
-          else
-            echo "RAILWAY_TOKEN is set (masked for security)"
-          fi
+          # Create a clean directory for deployment
+          mkdir -p /tmp/storefront-deploy
           
-          echo "Project ID: $RAILWAY_PROJECT_ID"
-          if [ -z "$RAILWAY_PROJECT_ID" ]; then
-            echo "RAILWAY_PROJECT_ID is empty"
-            exit 1
-          else
-            echo "RAILWAY_PROJECT_ID is set"
-          fi
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          # Copy all storefront files to the deployment directory
+          cp -r storefront/* storefront/.env* /tmp/storefront-deploy/ 2>/dev/null || true
+          
+          echo "Contents of deployment directory:"
+          ls -la /tmp/storefront-deploy/
 
-      # Simplified deployment approach - just using the service flag
-      - name: Deploy Storefront
+      - name: Deploy to Railway
         run: |
-          cd storefront
-          railway up -s Storefront -d
+          # Set current directory to the clean deployment directory
+          cd /tmp/storefront-deploy
+          
+          # Set up a minimal Railway config file to ensure it deploys to the correct service
+          echo '{
+            "$schema": "https://railway.app/railway.schema.json",
+            "build": {
+              "builder": "NIXPACKS",
+              "buildCommand": "bun install",
+              "nixpacksConfigPath": "nixpacks.toml"
+            },
+            "deploy": {
+              "numReplicas": 1,
+              "startCommand": "bun run start",
+              "restartPolicyType": "ON_FAILURE",
+              "restartPolicyMaxRetries": 10
+            }
+          }' > railway.json
+          
+          # Deploy with detached mode
+          railway up -d
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          RAILWAY_SERVICE: "Storefront"
           CI: true 

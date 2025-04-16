@@ -23,10 +23,7 @@ jobs:
           
       - name: Install Railway CLI
         run: npm install -g @railway/cli
-        
-      - name: Check Railway CLI Version
-        run: railway --version
-        
+          
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -35,55 +32,41 @@ jobs:
       - name: Install Global Dependencies
         run: bun add medusajs-launch-utils@latest -g
 
-      - name: Verify Token and Project ID
+      - name: Create Clean Deployment Directory
         run: |
-          echo "Token length: ${#RAILWAY_TOKEN}"
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_TOKEN is empty"
-            exit 1
-          else
-            echo "RAILWAY_TOKEN is set (masked for security)"
-          fi
+          # Create a clean directory for deployment
+          mkdir -p /tmp/backend-deploy
           
-          echo "Project ID: $RAILWAY_PROJECT_ID"
-          if [ -z "$RAILWAY_PROJECT_ID" ]; then
-            echo "RAILWAY_PROJECT_ID is empty"
-            exit 1
-          else
-            echo "RAILWAY_PROJECT_ID is set"
-          fi
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          # Copy all backend files to the deployment directory
+          cp -r backend/* backend/.env* /tmp/backend-deploy/
           
-      - name: Check Project Status
-        run: railway status --json
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
-          
-      - name: List Available Services
-        run: |
-          echo "Attempting to list all services in project..."
-          # Using a trick to output service list without interactive prompt
-          echo '{"projectId":"$RAILWAY_PROJECT_ID"}' > railway.json
-          railway service --json || echo "Service listing failed but continuing..."
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
-          
-      - name: Check Backend Service Variables
-        run: railway variables -s Backend --json || echo "Variable listing failed but continuing..."
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          echo "Contents of deployment directory:"
+          ls -la /tmp/backend-deploy/
 
-      # Simplified deployment approach - just using the service flag
-      - name: Deploy Backend
+      - name: Deploy to Railway
         run: |
-          cd backend
-          railway up -s Backend -d
+          # Set current directory to the clean deployment directory
+          cd /tmp/backend-deploy
+          
+          # Set up a minimal Railway config file to ensure it deploys to the correct service
+          echo '{
+            "$schema": "https://railway.app/railway.schema.json",
+            "build": {
+              "builder": "NIXPACKS",
+              "buildCommand": "bun install"
+            },
+            "deploy": {
+              "numReplicas": 1,
+              "startCommand": "bun start",
+              "restartPolicyType": "ON_FAILURE",
+              "restartPolicyMaxRetries": 10
+            }
+          }' > railway.json
+          
+          # Deploy with detached mode
+          railway up -d
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: "a7713257-24ad-40dd-8bc1-015aa8733b04"
+          RAILWAY_SERVICE: "Backend"
           CI: true 

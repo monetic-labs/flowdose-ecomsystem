@@ -1,11 +1,11 @@
 [phases.setup]
-nixpkgs = ["bun"]
+nixpkgs = ["nodejs_22"]
 
 [phases.install]
-cmds = ["bun install", "bun add medusajs-launch-utils@latest -g"]
+cmds = ["npm install -g pnpm", "pnpm install", "pnpm add medusajs-launch-utils@latest -g"]
 
 [phases.build]
-cmds = ["bun run build", "mkdir -p .medusa/server", "cp medusa-config.js .medusa/server/"]
+cmds = ["pnpm build", "mkdir -p .medusa/server", "cp medusa-config.js .medusa/server/"]
 
 [start]
-cmd = "bun start" 
+cmd = "pnpm start" 

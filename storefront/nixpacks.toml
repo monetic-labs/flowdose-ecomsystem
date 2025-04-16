@@ -1,11 +1,11 @@
 [phases.setup]
-nixpkgs = ["bun"]
+nixpkgs = ["nodejs_22"]
 
 [phases.install]
-cmds = ["bun install"]
+cmds = ["npm install -g pnpm", "pnpm install"]
 
 [phases.build]
-cmds = ["bun run build"]
+cmds = ["pnpm run build"]
 
 [start]
-cmd = "bun run start" 
+cmd = "pnpm run start" 

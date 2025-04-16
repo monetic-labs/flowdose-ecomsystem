@@ -17,17 +17,42 @@ app.get('/key-exchange', (req, res) => {
   res.json({ success: true, message: 'Backend connection successful' });
 });
 
-// Publishable API key endpoint needed by the frontend
+// Medusa store API route for getting publishable API key
 app.get('/store/publishable-api-keys', (req, res) => {
+  // Format required by the Medusa storefront
+  const publishable_key = {
+    id: "pk_test_1234567890",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by: "admin",
+    revoked_by: null,
+    revoked_at: null,
+    title: "Storefront API Key"
+  };
+  
   res.json({
-    publishable_api_keys: [
-      {
-        id: "pk_test_medusa_dummy_key",
-        created_at: new Date().toISOString(),
-        revoked_at: null
-      }
-    ]
+    publishable_api_keys: [publishable_key]
   });
+});
+
+// Medusa store API to use in header request patterns
+app.get('/store/publishable-api-key', (req, res) => {
+  res.json({
+    publishable_api_key: {
+      id: "pk_test_1234567890",
+      created_at: new Date().toISOString(), 
+      updated_at: new Date().toISOString(),
+      created_by: "admin",
+      revoked_by: null,
+      revoked_at: null,
+      title: "Storefront API Key"
+    }
+  });
+});
+
+// Medusa admin products endpoint (for testing DB connection)
+app.get('/admin/products', (req, res) => {
+  res.json({ success: true, products: [] });
 });
 
 // Catch-all for debugging

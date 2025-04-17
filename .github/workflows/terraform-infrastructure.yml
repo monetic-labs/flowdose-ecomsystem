@@ -95,14 +95,8 @@ jobs:
           echo "SSH public key generated:"
           ssh-keygen -lf ~/.ssh/terraform_deploy_key.pub
           
-          # Set as environment variables for Terraform
+          # Set as environment variable for Terraform
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/terraform_deploy_key.pub)" >> $GITHUB_ENV
-          
-          # Export the private key as an environment variable for Terraform to use
-          # We use base64 to avoid issues with newlines and special characters
-          echo "TF_VAR_ssh_private_key<<EOF" >> $GITHUB_ENV
-          cat ~/.ssh/terraform_deploy_key >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
       
       - name: Terraform Format
         id: fmt
@@ -270,3 +264,28 @@ jobs:
             } catch (error) {
               console.error('Error updating repository variables:', error);
             } 
+
+      - name: Display Infrastructure Info
+        if: always() && !cancelled() && github.ref == 'refs/heads/master'
+        run: |
+          echo "========================================"
+          echo "Infrastructure Deployment Information"
+          echo "========================================"
+          
+          # Try to get the output values from Terraform state
+          echo "Getting Terraform outputs..."
+          terraform output || echo "Failed to get Terraform outputs"
+          
+          # Try to get the droplet IPs directly from DO
+          echo "Getting droplet information from DigitalOcean..."
+          curl -s -X GET \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
+            "https://api.digitalocean.com/v2/droplets?page=1&per_page=10" | \
+            jq '.droplets[] | {name, id, status, ip: .networks.v4[0].ip_address}'
+          
+          echo "========================================"
+          echo "Infrastructure deployment completed."
+          echo "Check the logs above for any issues."
+          echo "========================================"
+        working-directory: terraform 

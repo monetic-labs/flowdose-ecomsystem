@@ -31,17 +31,7 @@ resource "digitalocean_droplet" "backend" {
   size     = var.backend_droplet_size
   ssh_keys = local.ssh_key_ids
 
-  # Increased timeout for initial setup
-  provisioner "remote-exec" {
-    inline = ["sleep 10"] # Give docker time to start
-    connection {
-      host        = self.ipv4_address
-      type        = "ssh"
-      user        = "root"
-      private_key = var.ssh_private_key
-    }
-  }
-
+  # Use user_data instead of provisioner to set up the server
   user_data = <<-EOF
     #!/bin/bash
     export DEBIAN_FRONTEND=noninteractive
@@ -64,6 +54,8 @@ resource "digitalocean_droplet" "backend" {
     # Create a simple status file to indicate provisioning is complete
     echo "provisioned: $(date)" > /opt/flowdose/backend-provisioned.txt
   EOF
+
+  # No provisioners - rely on user_data alone
 }
 
 # Droplet for Storefront (Next.js)
@@ -74,17 +66,7 @@ resource "digitalocean_droplet" "storefront" {
   size     = var.storefront_droplet_size
   ssh_keys = local.ssh_key_ids
 
-  # Increased timeout for initial setup
-  provisioner "remote-exec" {
-    inline = ["sleep 10"] # Give docker time to start
-    connection {
-      host        = self.ipv4_address
-      type        = "ssh"
-      user        = "root"
-      private_key = var.ssh_private_key
-    }
-  }
-
+  # Use user_data instead of provisioner to set up the server
   user_data = <<-EOF
     #!/bin/bash
     export DEBIAN_FRONTEND=noninteractive
@@ -107,6 +89,8 @@ resource "digitalocean_droplet" "storefront" {
     # Create a simple status file to indicate provisioning is complete
     echo "provisioned: $(date)" > /opt/flowdose/storefront-provisioned.txt
   EOF
+
+  # No provisioners - rely on user_data alone
 }
 
 # DNS Configuration

@@ -14,12 +14,6 @@ variable "ssh_public_key" {
   }
 }
 
-variable "ssh_private_key" {
-  description = "SSH private key content (required for provisioning)"
-  type        = string
-  sensitive   = true
-}
-
 variable "environment" {
   description = "Environment (staging or production)"
   type        = string

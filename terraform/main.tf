@@ -4,10 +4,6 @@ terraform {
       source  = "digitalocean/digitalocean"
       version = "~> 2.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
   }
   required_version = ">= 1.0.0"
   
@@ -18,37 +14,13 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Generate a unique name for the key
-resource "random_id" "key_suffix" {
-  byte_length = 4
-}
-
-# First, try to create the SSH key and ignore any errors if it already exists
-resource "digitalocean_ssh_key" "deploy_key" {
-  name       = "flowdose-deploy-key-${var.environment}-${random_id.key_suffix.hex}"
-  public_key = var.ssh_public_key
-  
-  # This will make Terraform ignore SSH key creation errors about duplicate keys
-  lifecycle {
-    ignore_changes = [public_key]
-  }
-}
-
 # Always fetch all SSH keys to ensure we have access to them
 data "digitalocean_ssh_keys" "all" {}
 
 # Local variables
 locals {
-  # Process the SSH key to get just the content part
-  ssh_key_parts = split(" ", var.ssh_public_key)
-  key_content = length(local.ssh_key_parts) > 1 ? local.ssh_key_parts[1] : ""
-  
-  # Get all SSH keys from the account
-  all_ssh_keys = data.digitalocean_ssh_keys.all.ssh_keys
-  
-  # Create a list of key IDs to use for droplets - we'll use them all to ensure
-  # we don't lose access, and our key will be included
-  ssh_key_ids = [for key in local.all_ssh_keys : key.id]
+  # Create a list of key IDs to use for droplets - we'll use all existing keys to ensure we don't lose access
+  ssh_key_ids = [for key in data.digitalocean_ssh_keys.all.ssh_keys : key.id]
 }
 
 # Droplet for Backend (Medusa.js)
@@ -66,7 +38,7 @@ resource "digitalocean_droplet" "backend" {
       host        = self.ipv4_address
       type        = "ssh"
       user        = "root"
-      private_key = file(var.ssh_private_key_path)
+      private_key = var.ssh_private_key
     }
   }
 
@@ -109,7 +81,7 @@ resource "digitalocean_droplet" "storefront" {
       host        = self.ipv4_address
       type        = "ssh"
       user        = "root"
-      private_key = file(var.ssh_private_key_path)
+      private_key = var.ssh_private_key
     }
   }
 

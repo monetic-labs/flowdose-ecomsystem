@@ -14,10 +14,10 @@ variable "ssh_public_key" {
   }
 }
 
-variable "ssh_private_key_path" {
-  description = "Path to the SSH private key file"
+variable "ssh_private_key" {
+  description = "SSH private key content (required for provisioning)"
   type        = string
-  default     = "~/.ssh/flowdose-do"
+  sensitive   = true
 }
 
 variable "environment" {
@@ -105,4 +105,10 @@ variable "postgres_host" {
 variable "redis_host" {
   description = "Redis host"
   type        = string
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to the SSH private key file (for local testing only)"
+  type        = string
+  default     = ""
 } 

@@ -1,11 +1,13 @@
 terraform {
   required_providers {
     digitalocean = {
-      source = "digitalocean/digitalocean"
+      source  = "digitalocean/digitalocean"
       version = "~> 2.0"
     }
   }
   required_version = ">= 1.0.0"
+  
+  # Backend configuration is in backend.tf
 }
 
 provider "digitalocean" {
@@ -32,7 +34,7 @@ resource "digitalocean_droplet" "backend" {
       host        = self.ipv4_address
       type        = "ssh"
       user        = "root"
-      private_key = file("~/.ssh/flowdose-do") # Using our new flowdose key without passphrase
+      private_key = file(var.ssh_private_key_path)
     }
   }
 
@@ -76,9 +78,14 @@ resource "digitalocean_droplet" "backend" {
           - ADMIN_CORS=https://admin.${var.domain_name},https://store.${var.domain_name}
           - STORE_CORS=https://store.${var.domain_name}
           - AUTH_CORS=https://admin.${var.domain_name},https://store.${var.domain_name}
-          # Pass other env vars from .env.production if needed, ensure they are available here or set in DO
-          - JWT_SECRET=${var.jwt_secret} # Example: Make sure these are defined in variables.tf and passed via terraform.tfvars
+          # Auth secrets
+          - JWT_SECRET=${var.jwt_secret}
           - COOKIE_SECRET=${var.cookie_secret}
+          # Admin account
+          - MEDUSA_ADMIN_EMAIL=admin@flowdose.xyz
+          - MEDUSA_ADMIN_PASSWORD=${var.admin_password}
+          # Publishable Key
+          - MEDUSA_PUBLISHABLE_KEY=${var.publishable_key}
         restart: always
 
       caddy:
@@ -119,7 +126,7 @@ resource "digitalocean_droplet" "storefront" {
       host        = self.ipv4_address
       type        = "ssh"
       user        = "root"
-      private_key = file("~/.ssh/flowdose-do") # Using our new flowdose key without passphrase
+      private_key = file(var.ssh_private_key_path)
     }
   }
 
@@ -158,6 +165,8 @@ resource "digitalocean_droplet" "storefront" {
           - NODE_ENV=${var.environment}
           # Use HTTPS and the admin subdomain for backend URL
           - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.${var.domain_name}
+          - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${var.publishable_key}
+          - NEXT_PUBLIC_BASE_URL=https://store.${var.domain_name}
           - PORT=3000
         restart: always
 
@@ -208,35 +217,4 @@ resource "digitalocean_record" "admin" {
   name   = "admin" # Subdomain for the backend/admin
   value  = digitalocean_droplet.backend.ipv4_address
   ttl    = 1800
-}
-
-# Output variables for use in scripts
-output "backend_ip" {
-  value = digitalocean_droplet.backend.ipv4_address
-  description = "The IP address of the Backend droplet"
-}
-
-output "storefront_ip" {
-  value = digitalocean_droplet.storefront.ipv4_address
-  description = "The IP address of the Storefront droplet"
-}
-
-output "backend_url" {
-  value = var.domain_name != "" ? "https://admin.${var.domain_name}" : "http://${digitalocean_droplet.backend.ipv4_address}:9000"
-  description = "The URL for the backend API/admin"
-}
-
-output "storefront_url" {
-  value = var.domain_name != "" ? "https://store.${var.domain_name}" : "http://${digitalocean_droplet.storefront.ipv4_address}:3000"
-  description = "The URL for the storefront"
-}
-
-output "postgres_host" {
-  value = var.postgres_host
-  description = "The hostname of the PostgreSQL database"
-}
-
-output "redis_host" {
-  value = var.redis_host
-  description = "The hostname of the Redis database"
 } 

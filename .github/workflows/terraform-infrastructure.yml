@@ -1,0 +1,146 @@
+name: Terraform Infrastructure Deployment
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-infrastructure.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+  TF_VAR_environment: ${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  terraform:
+    name: "Terraform Infrastructure"
+    runs-on: ubuntu-latest
+    
+    # Use a timeout to avoid excessive workflow minutes
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+          
+      - name: Configure Terraform Credentials
+        run: |
+          cat > ~/.terraformrc <<EOF
+          credentials "app.terraform.io" {
+            token = "${{ secrets.TF_API_TOKEN }}"
+          }
+          EOF
+          mkdir -p terraform
+      
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: terraform
+        continue-on-error: true
+      
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="access_key=${{ secrets.DO_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET_KEY }}"
+        working-directory: terraform
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+        working-directory: terraform
+      
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -input=false -no-color
+        working-directory: terraform
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_cookie_secret: ${{ secrets.COOKIE_SECRET }}
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_redis_url: ${{ secrets.REDIS_URL }}
+          TF_VAR_postgres_host: ${{ secrets.POSTGRES_HOST }}
+          TF_VAR_redis_host: ${{ secrets.REDIS_HOST }}
+          TF_VAR_admin_password: ${{ secrets.ADMIN_PASSWORD }}
+          TF_VAR_publishable_key: ${{ secrets.PUBLISHABLE_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+        continue-on-error: true
+      
+      - name: Update PR with Plan
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            
+            <details><summary>Show Plan</summary>
+            
+            \`\`\`terraform
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+            
+            </details>
+            
+            *Run ID: ${{ github.run_id }}*`;
+              
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+      
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        run: terraform apply -auto-approve -input=false
+        working-directory: terraform
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_cookie_secret: ${{ secrets.COOKIE_SECRET }}
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_redis_url: ${{ secrets.REDIS_URL }}
+          TF_VAR_postgres_host: ${{ secrets.POSTGRES_HOST }}
+          TF_VAR_redis_host: ${{ secrets.REDIS_HOST }}
+          TF_VAR_admin_password: ${{ secrets.ADMIN_PASSWORD }}
+          TF_VAR_publishable_key: ${{ secrets.PUBLISHABLE_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+
+      - name: Output Infrastructure Info
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        id: terraform_output
+        run: |
+          echo "BACKEND_IP=$(terraform output -raw backend_ip)" >> $GITHUB_ENV
+          echo "STOREFRONT_IP=$(terraform output -raw storefront_ip)" >> $GITHUB_ENV
+        working-directory: terraform
+
+      - name: Save IPs to Deployment Environment
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        run: |
+          echo "BACKEND_IP=${{ env.BACKEND_IP }}" >> $GITHUB_OUTPUT
+          echo "STOREFRONT_IP=${{ env.STOREFRONT_IP }}" >> $GITHUB_OUTPUT 

@@ -18,7 +18,8 @@
     "ib": "init-backend",
     "start": "mkdir -p .medusa/server && cp -f medusa-config.js .medusa/server/ && init-backend && cd .medusa/server && medusa start --verbose",
     "dev": "medusa develop",
-    "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002"
+    "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002",
+    "init": "bash src/scripts/init-backend.sh"
   },
   "dependencies": {
     "@medusajs/admin-sdk": "latest",

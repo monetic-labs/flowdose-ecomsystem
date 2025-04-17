@@ -1,0 +1,82 @@
+name: Terraform Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      recreate_bucket:
+        description: 'WARNING: Recreate state bucket (will destroy all state!)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+env:
+  TF_VAR_region: "sfo3"
+
+jobs:
+  bootstrap:
+    name: "Bootstrap Terraform State"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Confirm Dangerous Action
+        if: ${{ github.event.inputs.recreate_bucket == 'true' }}
+        run: |
+          echo "⚠️ WARNING: You are about to DESTROY and RECREATE the Terraform state bucket!"
+          echo "This will PERMANENTLY DELETE all existing Terraform state."
+          echo ""
+          echo "If this is accidental, cancel this workflow now."
+          sleep 10
+          echo "Proceeding with dangerous operation..."
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/bootstrap
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: terraform/bootstrap
+      
+      - name: Terraform Plan
+        run: terraform plan -input=false
+        working-directory: terraform/bootstrap
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+        working-directory: terraform/bootstrap
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+      
+      - name: Output Bucket Info
+        id: bucket_info
+        run: |
+          echo "BUCKET_NAME=$(terraform output -raw bucket_name)" >> $GITHUB_OUTPUT
+          echo "BUCKET_ENDPOINT=$(terraform output -raw bucket_endpoint)" >> $GITHUB_OUTPUT
+        working-directory: terraform/bootstrap
+      
+      - name: Display Next Steps
+        run: |
+          echo "✅ Terraform state bucket created successfully!"
+          echo ""
+          echo "Bucket Name: ${{ steps.bucket_info.outputs.BUCKET_NAME }}"
+          echo "Bucket Endpoint: ${{ steps.bucket_info.outputs.BUCKET_ENDPOINT }}"
+          echo ""
+          echo "Next steps:"
+          echo "1. Create Spaces access keys in the DigitalOcean console"
+          echo "2. Add the access keys as GitHub secrets (DO_SPACES_ACCESS_KEY and DO_SPACES_SECRET_KEY)"
+          echo "3. Run the main Terraform infrastructure workflow" 

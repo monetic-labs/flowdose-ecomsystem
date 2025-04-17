@@ -7,6 +7,13 @@ variable "do_token" {
 variable "ssh_public_key" {
   description = "SSH public key content"
   type        = string
+  default     = ""
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to the SSH private key file"
+  type        = string
+  default     = "~/.ssh/flowdose-do"
 }
 
 variable "environment" {
@@ -55,6 +62,35 @@ variable "domain_name" {
   description = "Domain name for the application (leave empty if not using custom domain)"
   type        = string
   default     = ""
+}
+
+variable "admin_email_for_certs" {
+  description = "Email address for Let's Encrypt certificate notifications"
+  type        = string
+  default     = "admin@flowdose.xyz"
+}
+
+variable "jwt_secret" {
+  description = "Secret key for JWT authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "cookie_secret" {
+  description = "Secret key for cookie encryption"
+  type        = string
+  sensitive   = true
+}
+
+variable "admin_password" {
+  description = "Admin user password"
+  type        = string
+  sensitive   = true
+}
+
+variable "publishable_key" {
+  description = "Medusa publishable key"
+  type        = string
 }
 
 variable "postgres_host" {

@@ -132,3 +132,37 @@ When committing changes to trigger Railway builds:
    ```
 
 Railway is configured to detect which service to build based on the changes in each commit.
+
+# Flowdose Ecosystem
+
+## Infrastructure and Deployment
+
+### Terraform Infrastructure
+
+This project uses Terraform to manage infrastructure on DigitalOcean. All infrastructure configuration is in the `/terraform` directory.
+
+#### Setting up for Deployment
+
+1. **Bootstrap** (one-time setup):
+   - Run the GitHub Actions workflow `terraform-bootstrap.yml` to create the state storage bucket
+   - Create access keys for the Spaces bucket in DigitalOcean console
+
+2. **Required Secrets**
+   Add these secrets to your GitHub repository:
+   - `DO_API_TOKEN`: DigitalOcean API token
+   - `DO_SPACES_ACCESS_KEY`: Spaces access key for state storage
+   - `DO_SPACES_SECRET_KEY`: Spaces secret key for state storage
+   - `DO_SSH_PUBLIC_KEY`: SSH public key for droplet provisioning
+   - `DATABASE_URL`: PostgreSQL connection URL
+   - `REDIS_URL`: Redis connection URL
+   - `POSTGRES_HOST`: PostgreSQL host
+   - `REDIS_HOST`: Redis host
+   - `JWT_SECRET`: Secret for JWT tokens
+   - `COOKIE_SECRET`: Secret for cookies
+   - `ADMIN_PASSWORD`: Password for Medusa admin
+   - `PUBLISHABLE_KEY`: Medusa publishable key
+   - `DOMAIN_NAME`: Domain name (optional)
+
+3. **Deployment**
+   - Commits to the `master` branch that modify files in the `terraform/` directory will trigger automatic deployment
+   - You can also manually trigger deployment via the GitHub Actions workflow

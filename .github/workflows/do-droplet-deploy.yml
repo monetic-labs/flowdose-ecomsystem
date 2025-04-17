@@ -9,9 +9,43 @@ on:
       - 'storefront/**'
       - '.github/workflows/do-droplet-deploy.yml'
       - 'deploy-trigger'
+  workflow_run:
+    workflows: ["Terraform Infrastructure Deployment"]
+    types:
+      - completed
 
 jobs:
+  prepare_deployment:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_ip: ${{ steps.get_ips.outputs.backend_ip }}
+      storefront_ip: ${{ steps.get_ips.outputs.storefront_ip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Get Server IPs from Terraform Output
+        id: get_ips
+        working-directory: terraform
+        run: |
+          # Initialize Terraform to read state from remote backend
+          terraform init -backend-config="access_key=${{ secrets.DO_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET_KEY }}"
+          
+          # Get the output values from Terraform state
+          BACKEND_IP=$(terraform output -raw backend_ip || echo "24.144.87.68")
+          STOREFRONT_IP=$(terraform output -raw storefront_ip || echo "165.232.157.66")
+          
+          # Output these values for other jobs
+          echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
+          echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
+          
+          echo "Using Backend IP: $BACKEND_IP"
+          echo "Using Storefront IP: $STOREFRONT_IP"
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+
   deploy:
+    needs: prepare_deployment
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,12 +60,12 @@ jobs:
       - name: Adding Known Hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H 24.144.87.68 >> ~/.ssh/known_hosts
-          ssh-keyscan -H 165.232.157.66 >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ needs.prepare_deployment.outputs.backend_ip }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ needs.prepare_deployment.outputs.storefront_ip }} >> ~/.ssh/known_hosts
       
       - name: Deploy Backend
         run: |
-          ssh -o StrictHostKeyChecking=no root@24.144.87.68 '
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} '
             cd /opt/flowdose && 
             git pull &&
             docker compose -f docker-compose.backend.yml down &&
@@ -41,7 +75,7 @@ jobs:
         
       - name: Deploy Storefront
         run: |
-          ssh -o StrictHostKeyChecking=no root@165.232.157.66 '
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} '
             cd /opt/flowdose && 
             git pull &&
             docker compose -f docker-compose.storefront.yml down &&

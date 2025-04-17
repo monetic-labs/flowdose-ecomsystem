@@ -88,7 +88,7 @@ export async function seedDiscount(axios?: AxiosInstance) {
 
 async function loginAdmin() {
   const resp = await axios.post("/admin/auth/token", {
-    email: process.env.MEDUSA_ADMIN_EMAIL || "admin@medusa-test.com",
+    email: process.env.MEDUSA_ADMIN_EMAIL || "admin@flowdose.xyz",
     password: process.env.MEDUSA_ADMIN_PASSWORD || "supersecret",
   })
   if (resp.status !== 200) {

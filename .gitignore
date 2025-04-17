@@ -57,3 +57,27 @@ docker-compose.*.yml
 # Local secrets
 secrets/
 credentials/
+
+# Deployment files with sensitive information
+deploy.sh
+terraform.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Terraform standardized structure
+terraform/**/.terraform/
+terraform/**/.terraform.lock.hcl
+terraform/*.tfvars
+terraform/bootstrap/*.tfvars
+!terraform/**/*.tfvars.example
+!terraform/bootstrap/*.tfvars.example
+
+# Allow deployment example scripts but not actual ones with secrets
+!terraform/deploy.sh.example
+!terraform/bootstrap/deploy.sh.example
+terraform/deploy.sh
+terraform/bootstrap/deploy.sh
+
+# Archive of old configurations
+archive/
+archive/**/*

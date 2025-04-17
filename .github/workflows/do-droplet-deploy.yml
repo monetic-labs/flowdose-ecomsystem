@@ -211,21 +211,9 @@ jobs:
           fi
           
           echo "Checking Terraform state..."
-          # Check if Terraform is currently executing (if a lock exists)
-          LOCK_ID=$(terraform state pull 2>/dev/null | jq -r '.serial' 2>/dev/null)
-          if [ $? -eq 0 ] && [ ! -z "$LOCK_ID" ] && [ "$LOCK_ID" != "null" ]; then
-            echo "Found lock with ID: $LOCK_ID, attempting to unlock..."
-            terraform force-unlock -force "$LOCK_ID" || true
-            echo "Terraform state is locked. Skipping deployment."
-            echo "can_deploy=false" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "No active locks found in Terraform state."
-          fi
-          
-          # Try to get the output values from Terraform state
-          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null)
-          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null)
+          # Try to get the output values from Terraform state directly without lock checking
+          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "")
+          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "")
           
           # Check if both IPs exist
           if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then

@@ -57,8 +57,39 @@ jobs:
           echo "Checking secret availability (will not print values)..."
           if [ -n "$DO_API_TOKEN" ]; then echo "DO_API_TOKEN is available"; else echo "DO_API_TOKEN is missing"; fi
           if [ -n "$DO_SSH_PUBLIC_KEY" ]; then echo "DO_SSH_PUBLIC_KEY is available"; else echo "DO_SSH_PUBLIC_KEY is missing"; fi
+          if [ -n "$DO_SPACES_ACCESS_KEY" ]; then echo "DO_SPACES_ACCESS_KEY is available"; else echo "DO_SPACES_ACCESS_KEY is missing"; fi
+          if [ -n "$DO_SPACES_SECRET_KEY" ]; then echo "DO_SPACES_SECRET_KEY is available"; else echo "DO_SPACES_SECRET_KEY is missing"; fi
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+          DO_SSH_PUBLIC_KEY: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+          DO_SPACES_ACCESS_KEY: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          DO_SPACES_SECRET_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+      
+      - name: Configure SSH Keys
+        run: |
+          # Create a directory for SSH keys
+          mkdir -p ~/.ssh
+          
+          # If DO_SSH_PUBLIC_KEY is provided, use it
+          if [ -n "$DO_SSH_PUBLIC_KEY" ]; then
+            echo "Using provided SSH public key"
+            echo "$DO_SSH_PUBLIC_KEY" > ~/.ssh/terraform_deploy_key.pub
+          else
+            echo "No SSH key provided, generating a temporary one"
+            # Generate a SSH key pair without passphrase for Terraform
+            ssh-keygen -t rsa -b 4096 -f ~/.ssh/terraform_deploy_key -N '' -C "terraform-deploy-key"
+          fi
+          
+          # Set permissions
+          chmod 600 ~/.ssh/terraform_deploy_key*
+          
+          # Output public key for debugging (safe to show)
+          echo "SSH public key to be used:"
+          cat ~/.ssh/terraform_deploy_key.pub
+          
+          # Set as environment variable for Terraform
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/terraform_deploy_key.pub)" >> $GITHUB_ENV
+        env:
           DO_SSH_PUBLIC_KEY: ${{ secrets.DO_SSH_PUBLIC_KEY }}
       
       - name: Terraform Format
@@ -86,7 +117,7 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
-          TF_VAR_ssh_public_key: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+          # SSH key is now set via GITHUB_ENV in the Configure SSH Keys step
           TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
           TF_VAR_cookie_secret: ${{ secrets.COOKIE_SECRET }}
           TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
@@ -132,7 +163,7 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
-          TF_VAR_ssh_public_key: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+          # SSH key is now set via GITHUB_ENV in the Configure SSH Keys step
           TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
           TF_VAR_cookie_secret: ${{ secrets.COOKIE_SECRET }}
           TF_VAR_database_url: ${{ secrets.DATABASE_URL }}

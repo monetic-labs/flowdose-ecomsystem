@@ -143,4 +143,75 @@ jobs:
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
           echo "BACKEND_IP=${{ env.BACKEND_IP }}" >> $GITHUB_OUTPUT
-          echo "STOREFRONT_IP=${{ env.STOREFRONT_IP }}" >> $GITHUB_OUTPUT 
+          echo "STOREFRONT_IP=${{ env.STOREFRONT_IP }}" >> $GITHUB_OUTPUT
+
+      - name: Save IPs to Repository Variables
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/github-script@v6
+        env:
+          BACKEND_IP: ${{ env.BACKEND_IP }}
+          STOREFRONT_IP: ${{ env.STOREFRONT_IP }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Get the IPs from environment
+            const backendIP = process.env.BACKEND_IP || '';
+            const storefrontIP = process.env.STOREFRONT_IP || '';
+            
+            if (!backendIP || !storefrontIP) {
+              console.log('No IP addresses found to save');
+              return;
+            }
+            
+            // Save to repository variables
+            console.log(`Saving Backend IP: ${backendIP}`);
+            console.log(`Saving Storefront IP: ${storefrontIP}`);
+            
+            // Set variables using REST API
+            try {
+              // First, get existing variables
+              const { data: existingVars } = await github.rest.actions.listRepoVariables({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              
+              // Check if variables exist and update them
+              const backendVarExists = existingVars.variables.some(v => v.name === 'BACKEND_IP');
+              const storefrontVarExists = existingVars.variables.some(v => v.name === 'STOREFRONT_IP');
+              
+              if (backendVarExists) {
+                await github.rest.actions.updateRepoVariable({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'BACKEND_IP',
+                  value: backendIP
+                });
+              } else {
+                await github.rest.actions.createRepoVariable({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'BACKEND_IP',
+                  value: backendIP
+                });
+              }
+              
+              if (storefrontVarExists) {
+                await github.rest.actions.updateRepoVariable({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'STOREFRONT_IP',
+                  value: storefrontIP
+                });
+              } else {
+                await github.rest.actions.createRepoVariable({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'STOREFRONT_IP',
+                  value: storefrontIP
+                });
+              }
+              
+              console.log('Repository variables updated successfully');
+            } catch (error) {
+              console.error('Error updating repository variables:', error);
+            } 

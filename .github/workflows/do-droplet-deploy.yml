@@ -38,13 +38,8 @@ jobs:
         
       - name: Set Terraform Provider Credentials
         run: |
-          cat > terraform/provider.tf << EOL
-          provider "digitalocean" {
-            token             = "${{ secrets.DO_API_TOKEN }}"
-            spaces_access_id  = "${{ secrets.DO_SPACES_ACCESS_KEY }}"
-            spaces_secret_key = "${{ secrets.DO_SPACES_SECRET_KEY }}"
-          }
-          EOL
+          # Instead of creating a new provider file, update the existing one
+          sed -i 's/token = var.do_token/token = "${{ secrets.DO_API_TOKEN }}"/g' terraform/main.tf
         
       - name: Create Docker Compose Files
         run: |
@@ -172,6 +167,12 @@ jobs:
           fi
           
           echo "Initializing Terraform with backend credentials..."
+          # Check if backend_override.tf already exists and remove it
+          if [ -f "backend_override.tf" ]; then
+            echo "Removing existing backend_override.tf file..."
+            rm backend_override.tf
+          fi
+          
           # Create backend override file
           cat > backend_override.tf << EOL
           terraform {
@@ -211,10 +212,15 @@ jobs:
           
           echo "Checking Terraform state..."
           # Check if Terraform is currently executing (if a lock exists)
-          if terraform force-unlock -force $(terraform state pull | jq -r '.serial') 2>/dev/null; then
+          LOCK_ID=$(terraform state pull 2>/dev/null | jq -r '.serial' 2>/dev/null)
+          if [ $? -eq 0 ] && [ ! -z "$LOCK_ID" ] && [ "$LOCK_ID" != "null" ]; then
+            echo "Found lock with ID: $LOCK_ID, attempting to unlock..."
+            terraform force-unlock -force "$LOCK_ID" || true
             echo "Terraform state is locked. Skipping deployment."
             echo "can_deploy=false" >> $GITHUB_OUTPUT
             exit 0
+          else
+            echo "No active locks found in Terraform state."
           fi
           
           # Try to get the output values from Terraform state
@@ -223,9 +229,20 @@ jobs:
           
           # Check if both IPs exist
           if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
-            echo "Infrastructure not fully provisioned yet. Using fallback IPs."
-            BACKEND_IP=$FALLBACK_BACKEND_IP
-            STOREFRONT_IP=$FALLBACK_STOREFRONT_IP
+            echo "Infrastructure not fully provisioned yet."
+            
+            # Check if we have fallback IPs
+            if [ "$FALLBACK_BACKEND_IP" = "127.0.0.1" ] || [ "$FALLBACK_STOREFRONT_IP" = "127.0.0.1" ]; then
+              echo "No fallback IPs configured either. Deployment cannot proceed."
+              echo "Please run the terraform-infrastructure.yml workflow first to provision infrastructure"
+              echo "Or manually add BACKEND_IP and STOREFRONT_IP as repository variables."
+              echo "can_deploy=false" >> $GITHUB_OUTPUT
+              exit 1
+            else
+              echo "Using fallback IPs from repository variables."
+              BACKEND_IP=$FALLBACK_BACKEND_IP
+              STOREFRONT_IP=$FALLBACK_STOREFRONT_IP
+            fi
           fi
           
           # Output these values for other jobs

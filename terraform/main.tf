@@ -4,6 +4,10 @@ terraform {
       source  = "digitalocean/digitalocean"
       version = "~> 2.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
   required_version = ">= 1.0.0"
   
@@ -14,9 +18,17 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Use SSH key from variable
+# Look for existing SSH key with matching fingerprint
+data "digitalocean_ssh_keys" "all" {}
+
+# Generate a unique name for the key
+resource "random_id" "key_suffix" {
+  byte_length = 4
+}
+
+# Create SSH key with unique name to avoid conflicts
 resource "digitalocean_ssh_key" "deploy_key" {
-  name       = "flowdose-deploy-key-${var.environment}"
+  name       = "flowdose-deploy-key-${var.environment}-${random_id.key_suffix.hex}"
   public_key = var.ssh_public_key
 }
 

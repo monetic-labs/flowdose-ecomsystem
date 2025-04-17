@@ -5,9 +5,13 @@ variable "do_token" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key content"
+  description = "SSH public key content (required for Droplet access)"
   type        = string
-  default     = ""
+  
+  validation {
+    condition     = length(var.ssh_public_key) > 0 && can(regex("^ssh-[a-z0-9]+ [A-Za-z0-9+/=]+", var.ssh_public_key))
+    error_message = "SSH public key must be a valid OpenSSH public key format starting with 'ssh-rsa', 'ssh-ed25519', etc."
+  }
 }
 
 variable "ssh_private_key_path" {

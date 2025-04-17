@@ -1,0 +1,45 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=${ENVIRONMENT}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - PORT=9000
+      # CORS settings
+      - ADMIN_CORS=https://${ADMIN_DOMAIN},https://${STORE_DOMAIN}
+      - STORE_CORS=https://${STORE_DOMAIN}
+      - AUTH_CORS=https://${ADMIN_DOMAIN},https://${STORE_DOMAIN}
+      # Auth secrets
+      - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET}
+      # Admin account
+      - MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}
+      - MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # Publishable Key
+      - MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+    restart: always
+    networks:
+      - flowdose-network
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile_backend:/etc/caddy/Caddyfile
+      - ../data/caddy_data:/data
+      - ../data/caddy_config:/config
+    depends_on:
+      - backend
+    networks:
+      - flowdose-network
+
+networks:
+  flowdose-network:
+    external: true 

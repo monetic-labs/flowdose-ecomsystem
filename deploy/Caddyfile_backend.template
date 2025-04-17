@@ -1,0 +1,4 @@
+${ADMIN_DOMAIN} {
+    reverse_proxy backend:9000
+    tls ${ADMIN_EMAIL_FOR_CERTS}
+} 

@@ -27,7 +27,7 @@ resource "digitalocean_droplet" "backend" {
   size     = var.backend_droplet_size
   ssh_keys = [data.digitalocean_ssh_key.existing.id]
 
-  # Increased timeout for Caddy setup
+  # Increased timeout for initial setup
   provisioner "remote-exec" {
     inline = ["sleep 10"] # Give docker time to start
     connection {
@@ -46,68 +46,19 @@ resource "digitalocean_droplet" "backend" {
     systemctl start docker
     systemctl enable docker
 
-    # Clone the repository if it doesn't exist
-    if [ ! -d "/opt/flowdose" ]; then
-      git clone ${var.repo_url} /opt/flowdose
-    fi
-    cd /opt/flowdose
-    git pull # Ensure latest code
+    # Create project directory
+    mkdir -p /opt/flowdose
 
-    # Create Caddyfile for backend
-    cat > /opt/flowdose/Caddyfile_backend <<EOL
-    admin.${var.domain_name} {
-        reverse_proxy backend:9000
-        tls ${var.admin_email_for_certs} # Email for Let's Encrypt
-    }
-    EOL
+    # Set up docker network if it doesn't exist
+    docker network create flowdose-network || true
 
-    # Create docker-compose file for backend with Caddy
-    cat > /opt/flowdose/docker-compose.backend.yml <<EOL
-    version: '3.8'
-    services:
-      backend:
-        build:
-          context: ./backend
-          dockerfile: Dockerfile
-        environment:
-          - NODE_ENV=${var.environment}
-          - DATABASE_URL=${var.database_url}
-          - REDIS_URL=${var.redis_url}
-          - PORT=9000
-          # Updated CORS settings with HTTPS and new domains
-          - ADMIN_CORS=https://admin.${var.domain_name},https://store.${var.domain_name}
-          - STORE_CORS=https://store.${var.domain_name}
-          - AUTH_CORS=https://admin.${var.domain_name},https://store.${var.domain_name}
-          # Auth secrets
-          - JWT_SECRET=${var.jwt_secret}
-          - COOKIE_SECRET=${var.cookie_secret}
-          # Admin account
-          - MEDUSA_ADMIN_EMAIL=admin@flowdose.xyz
-          - MEDUSA_ADMIN_PASSWORD=${var.admin_password}
-          # Publishable Key
-          - MEDUSA_PUBLISHABLE_KEY=${var.publishable_key}
-        restart: always
+    # Create placeholder directory structure
+    mkdir -p /opt/flowdose/backend
+    mkdir -p /opt/flowdose/data/caddy_data
+    mkdir -p /opt/flowdose/data/caddy_config
 
-      caddy:
-        image: caddy:2-alpine
-        restart: unless-stopped
-        ports:
-          - "80:80"
-          - "443:443"
-        volumes:
-          - ./Caddyfile_backend:/etc/caddy/Caddyfile
-          - caddy_data:/data
-          - caddy_config:/config
-        depends_on:
-          - backend
-
-    volumes:
-      caddy_data:
-      caddy_config:
-    EOL
-
-    # Deploy the backend stack
-    docker-compose -f /opt/flowdose/docker-compose.backend.yml up -d --remove-orphans
+    # Create a simple status file to indicate provisioning is complete
+    echo "provisioned: $(date)" > /opt/flowdose/backend-provisioned.txt
   EOF
 }
 
@@ -119,7 +70,7 @@ resource "digitalocean_droplet" "storefront" {
   size     = var.storefront_droplet_size
   ssh_keys = [data.digitalocean_ssh_key.existing.id]
 
-  # Increased timeout for Caddy setup
+  # Increased timeout for initial setup
   provisioner "remote-exec" {
     inline = ["sleep 10"] # Give docker time to start
     connection {
@@ -138,58 +89,19 @@ resource "digitalocean_droplet" "storefront" {
     systemctl start docker
     systemctl enable docker
 
-    # Clone the repository if it doesn't exist
-    if [ ! -d "/opt/flowdose" ]; then
-      git clone ${var.repo_url} /opt/flowdose
-    fi
-    cd /opt/flowdose
-    git pull # Ensure latest code
+    # Create project directory
+    mkdir -p /opt/flowdose
 
-    # Create Caddyfile for storefront
-    cat > /opt/flowdose/Caddyfile_storefront <<EOL
-    store.${var.domain_name} {
-        reverse_proxy storefront:3000
-        tls ${var.admin_email_for_certs} # Email for Let's Encrypt
-    }
-    EOL
+    # Set up docker network if it doesn't exist
+    docker network create flowdose-network || true
 
-    # Create docker-compose file for storefront with Caddy
-    cat > /opt/flowdose/docker-compose.storefront.yml <<EOL
-    version: '3.8'
-    services:
-      storefront:
-        build:
-          context: ./storefront
-          dockerfile: Dockerfile
-        environment:
-          - NODE_ENV=${var.environment}
-          # Use HTTPS and the admin subdomain for backend URL
-          - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.${var.domain_name}
-          - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${var.publishable_key}
-          - NEXT_PUBLIC_BASE_URL=https://store.${var.domain_name}
-          - PORT=3000
-        restart: always
+    # Create placeholder directory structure
+    mkdir -p /opt/flowdose/storefront
+    mkdir -p /opt/flowdose/data/caddy_data
+    mkdir -p /opt/flowdose/data/caddy_config
 
-      caddy:
-        image: caddy:2-alpine
-        restart: unless-stopped
-        ports:
-          - "80:80"
-          - "443:443"
-        volumes:
-          - ./Caddyfile_storefront:/etc/caddy/Caddyfile
-          - caddy_data:/data
-          - caddy_config:/config
-        depends_on:
-          - storefront
-
-    volumes:
-      caddy_data:
-      caddy_config:
-    EOL
-
-    # Deploy the storefront stack
-    docker-compose -f /opt/flowdose/docker-compose.storefront.yml up -d --remove-orphans
+    # Create a simple status file to indicate provisioning is complete
+    echo "provisioned: $(date)" > /opt/flowdose/storefront-provisioned.txt
   EOF
 }
 

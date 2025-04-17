@@ -1,22 +1,32 @@
 # Output variables for use in scripts and GitHub Actions
 output "backend_ip" {
   value       = digitalocean_droplet.backend.ipv4_address
-  description = "The IP address of the Backend droplet"
+  description = "The public IP address of the backend server"
 }
 
 output "storefront_ip" {
   value       = digitalocean_droplet.storefront.ipv4_address
-  description = "The IP address of the Storefront droplet"
+  description = "The public IP address of the storefront server"
 }
 
-output "backend_url" {
-  value       = var.domain_name != "" ? "https://admin.${var.domain_name}" : "http://${digitalocean_droplet.backend.ipv4_address}:9000"
-  description = "The URL for the backend API/admin"
+output "admin_domain" {
+  value       = var.domain_name != "" ? "admin.${var.domain_name}" : digitalocean_droplet.backend.ipv4_address
+  description = "The domain or IP for accessing the admin panel"
 }
 
-output "storefront_url" {
-  value       = var.domain_name != "" ? "https://store.${var.domain_name}" : "http://${digitalocean_droplet.storefront.ipv4_address}:3000"
-  description = "The URL for the storefront"
+output "store_domain" {
+  value       = var.domain_name != "" ? "store.${var.domain_name}" : digitalocean_droplet.storefront.ipv4_address
+  description = "The domain or IP for accessing the storefront"
+}
+
+output "provisioning_complete" {
+  value       = "${timestamp()}"
+  description = "Timestamp to indicate when provisioning completed"
+}
+
+output "environment" {
+  value       = var.environment
+  description = "The current deployment environment"
 }
 
 output "postgres_host" {

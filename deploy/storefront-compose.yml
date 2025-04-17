@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  storefront:
+    build:
+      context: ../storefront
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=${ENVIRONMENT}
+      # Use HTTPS for backend URL
+      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
+      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+      - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
+      - PORT=3000
+    restart: always
+    networks:
+      - flowdose-network
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile_storefront:/etc/caddy/Caddyfile
+      - ../data/caddy_data:/data
+      - ../data/caddy_config:/config
+    depends_on:
+      - storefront
+    networks:
+      - flowdose-network
+
+networks:
+  flowdose-network:
+    external: true 

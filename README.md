@@ -153,6 +153,7 @@ This project uses Terraform to manage infrastructure on DigitalOcean. All infras
    - `DO_SPACES_ACCESS_KEY`: Spaces access key for state storage
    - `DO_SPACES_SECRET_KEY`: Spaces secret key for state storage
    - `DO_SSH_PUBLIC_KEY`: SSH public key for droplet provisioning
+   - `DO_SSH_PRIVATE_KEY`: SSH private key for deployment
    - `DATABASE_URL`: PostgreSQL connection URL
    - `REDIS_URL`: Redis connection URL
    - `POSTGRES_HOST`: PostgreSQL host
@@ -162,7 +163,20 @@ This project uses Terraform to manage infrastructure on DigitalOcean. All infras
    - `ADMIN_PASSWORD`: Password for Medusa admin
    - `PUBLISHABLE_KEY`: Medusa publishable key
    - `DOMAIN_NAME`: Domain name (optional)
+   - `ADMIN_EMAIL`: Email for Let's Encrypt certificates (optional)
 
-3. **Deployment**
-   - Commits to the `master` branch that modify files in the `terraform/` directory will trigger automatic deployment
-   - You can also manually trigger deployment via the GitHub Actions workflow
+### Deployment Architecture
+
+The deployment is split into two main components:
+
+1. **Infrastructure (Terraform)**
+   - Manages DigitalOcean resources (droplets, volumes, domains)
+   - Sets up basic server environment (Docker, directories, network)
+   - Changes to files in `/terraform` directory trigger infrastructure updates
+
+2. **Application Deployment (GitHub Actions)**
+   - Manages deployment of backend and storefront applications
+   - Uses Docker Compose configurations in `/deploy` directory
+   - Changes to files in `/backend` or `/storefront` directories trigger application updates
+
+This separation ensures that infrastructure and application deployments don't conflict with each other.

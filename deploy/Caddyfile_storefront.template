@@ -1,0 +1,4 @@
+${STORE_DOMAIN} {
+    reverse_proxy storefront:3000
+    tls ${ADMIN_EMAIL_FOR_CERTS}
+} 

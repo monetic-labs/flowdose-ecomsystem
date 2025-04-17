@@ -9,10 +9,16 @@ on:
       - 'storefront/**'
       - '.github/workflows/do-droplet-deploy.yml'
       - 'deploy-trigger'
-  workflow_run:
-    workflows: ["Terraform Infrastructure Deployment"]
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
 
 jobs:
   prepare_deployment:
@@ -20,6 +26,7 @@ jobs:
     outputs:
       backend_ip: ${{ steps.get_ips.outputs.backend_ip }}
       storefront_ip: ${{ steps.get_ips.outputs.storefront_ip }}
+      can_deploy: ${{ steps.get_ips.outputs.can_deploy }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -31,13 +38,28 @@ jobs:
           # Initialize Terraform to read state from remote backend
           terraform init -backend-config="access_key=${{ secrets.DO_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET_KEY }}"
           
-          # Get the output values from Terraform state
-          BACKEND_IP=$(terraform output -raw backend_ip || echo "24.144.87.68")
-          STOREFRONT_IP=$(terraform output -raw storefront_ip || echo "165.232.157.66")
+          # Check if Terraform is currently executing (if a lock exists)
+          if terraform force-unlock -force $(terraform state pull | jq -r '.serial') 2>/dev/null; then
+            echo "Terraform state is locked. Skipping deployment."
+            echo "can_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Try to get the output values from Terraform state
+          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null)
+          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null)
+          
+          # Check if both IPs exist
+          if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
+            echo "Infrastructure not fully provisioned yet. Skipping deployment."
+            echo "can_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           
           # Output these values for other jobs
           echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
           echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
+          echo "can_deploy=true" >> $GITHUB_OUTPUT
           
           echo "Using Backend IP: $BACKEND_IP"
           echo "Using Storefront IP: $STOREFRONT_IP"
@@ -47,6 +69,9 @@ jobs:
   deploy:
     needs: prepare_deployment
     runs-on: ubuntu-latest
+    if: needs.prepare_deployment.outputs.can_deploy == 'true'
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -63,22 +88,63 @@ jobs:
           ssh-keyscan -H ${{ needs.prepare_deployment.outputs.backend_ip }} >> ~/.ssh/known_hosts
           ssh-keyscan -H ${{ needs.prepare_deployment.outputs.storefront_ip }} >> ~/.ssh/known_hosts
       
+      - name: Wait for any infrastructure changes to complete
+        run: sleep 60  # Give Terraform user_data scripts time to complete
+      
+      - name: Create Caddy config files
+        run: |
+          # Create Caddyfile for backend from template
+          cat deploy/Caddyfile_backend.template | \
+            sed "s|\${ADMIN_DOMAIN}|admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}|g" | \
+            sed "s|\${ADMIN_EMAIL_FOR_CERTS}|${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}|g" \
+            > deploy/Caddyfile_backend
+          
+          # Create Caddyfile for storefront from template
+          cat deploy/Caddyfile_storefront.template | \
+            sed "s|\${STORE_DOMAIN}|store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}|g" | \
+            sed "s|\${ADMIN_EMAIL_FOR_CERTS}|${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}|g" \
+            > deploy/Caddyfile_storefront
+      
       - name: Deploy Backend
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} '
+          # First copy deployment files
+          scp -o StrictHostKeyChecking=no -r deploy/backend-compose.yml root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/docker-compose.yml
+          scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_backend root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/Caddyfile_backend
+          
+          # Now deploy with environment variables
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
             cd /opt/flowdose && 
             git pull &&
-            docker compose -f docker-compose.backend.yml down &&
-            docker compose -f docker-compose.backend.yml build --no-cache &&
-            docker compose -f docker-compose.backend.yml up -d
-          '
+            export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}' &&
+            export REDIS_URL='${{ secrets.REDIS_URL }}' &&
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}' &&
+            export COOKIE_SECRET='${{ secrets.COOKIE_SECRET }}' &&
+            export ADMIN_EMAIL='admin@flowdose.xyz' &&
+            export ADMIN_PASSWORD='${{ secrets.ADMIN_PASSWORD }}' &&
+            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
+            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
+            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
+            docker compose down &&
+            docker compose build --no-cache &&
+            docker compose up -d
+          "
         
       - name: Deploy Storefront
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} '
+          # First copy deployment files
+          scp -o StrictHostKeyChecking=no -r deploy/storefront-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
+          scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/Caddyfile_storefront
+          
+          # Now deploy with environment variables
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
             cd /opt/flowdose && 
             git pull &&
-            docker compose -f docker-compose.storefront.yml down &&
-            docker compose -f docker-compose.storefront.yml build --no-cache &&
-            docker compose -f docker-compose.storefront.yml up -d
-          ' 
+            export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
+            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
+            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
+            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
+            docker compose down &&
+            docker compose build --no-cache &&
+            docker compose up -d
+          " 

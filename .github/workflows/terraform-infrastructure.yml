@@ -52,6 +52,15 @@ jobs:
           EOF
           mkdir -p terraform
       
+      - name: Debug Environment Variables
+        run: |
+          echo "Checking secret availability (will not print values)..."
+          if [ -n "$DO_API_TOKEN" ]; then echo "DO_API_TOKEN is available"; else echo "DO_API_TOKEN is missing"; fi
+          if [ -n "$DO_SSH_PUBLIC_KEY" ]; then echo "DO_SSH_PUBLIC_KEY is available"; else echo "DO_SSH_PUBLIC_KEY is missing"; fi
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+          DO_SSH_PUBLIC_KEY: ${{ secrets.DO_SSH_PUBLIC_KEY }}
+      
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check -recursive
@@ -62,6 +71,9 @@ jobs:
         id: init
         run: terraform init -backend-config="access_key=${{ secrets.DO_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET_KEY }}"
         working-directory: terraform
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.DO_SSH_PUBLIC_KEY }}
       
       - name: Terraform Validate
         id: validate

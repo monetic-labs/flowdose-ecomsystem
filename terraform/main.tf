@@ -14,9 +14,10 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Use existing SSH key from DigitalOcean
-data "digitalocean_ssh_key" "existing" {
-  name = "flowdose-deploy-key"
+# Use SSH key from variable
+resource "digitalocean_ssh_key" "deploy_key" {
+  name       = "flowdose-deploy-key-${var.environment}"
+  public_key = var.ssh_public_key
 }
 
 # Droplet for Backend (Medusa.js)
@@ -25,7 +26,7 @@ resource "digitalocean_droplet" "backend" {
   name     = "${var.environment}-flowdose-backend"
   region   = var.region
   size     = var.backend_droplet_size
-  ssh_keys = [data.digitalocean_ssh_key.existing.id]
+  ssh_keys = [digitalocean_ssh_key.deploy_key.id]
 
   # Increased timeout for initial setup
   provisioner "remote-exec" {
@@ -68,7 +69,7 @@ resource "digitalocean_droplet" "storefront" {
   name     = "${var.environment}-flowdose-storefront"
   region   = var.region
   size     = var.storefront_droplet_size
-  ssh_keys = [data.digitalocean_ssh_key.existing.id]
+  ssh_keys = [digitalocean_ssh_key.deploy_key.id]
 
   # Increased timeout for initial setup
   provisioner "remote-exec" {

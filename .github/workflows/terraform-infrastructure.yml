@@ -184,16 +184,35 @@ jobs:
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         id: terraform_output
         run: |
-          echo "BACKEND_IP=$(terraform output -raw backend_ip)" >> $GITHUB_ENV
-          echo "STOREFRONT_IP=$(terraform output -raw storefront_ip)" >> $GITHUB_ENV
+          # Use a more robust approach to extract IPs from Terraform output
+          BACKEND_IP=$(terraform output -json | jq -r '.backend_ip.value // empty')
+          STOREFRONT_IP=$(terraform output -json | jq -r '.storefront_ip.value // empty')
+          
+          echo "Extracted Backend IP: $BACKEND_IP"
+          echo "Extracted Storefront IP: $STOREFRONT_IP"
+          
+          # Set environment variables for later steps
+          if [ -n "$BACKEND_IP" ]; then
+            echo "BACKEND_IP=$BACKEND_IP" >> $GITHUB_ENV
+          fi
+          
+          if [ -n "$STOREFRONT_IP" ]; then
+            echo "STOREFRONT_IP=$STOREFRONT_IP" >> $GITHUB_ENV
+          fi
         working-directory: terraform
 
       - name: Save IPs to Deployment Environment
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
-          echo "BACKEND_IP=${{ env.BACKEND_IP }}" >> $GITHUB_OUTPUT
-          echo "STOREFRONT_IP=${{ env.STOREFRONT_IP }}" >> $GITHUB_OUTPUT
-
+          # Check if IPs were extracted successfully
+          if [ -n "$BACKEND_IP" ] && [ -n "$STOREFRONT_IP" ]; then
+            echo "Setting outputs with IPs for downstream jobs"
+            echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
+            echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
+          else
+            echo "Warning: IP addresses not available"
+          fi
+            
       - name: Save IPs to Repository Variables
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: actions/github-script@v6
@@ -263,9 +282,9 @@ jobs:
               console.log('Repository variables updated successfully');
             } catch (error) {
               console.error('Error updating repository variables:', error);
-            } 
+            }
 
-      - name: Display Infrastructure Info
+      - name: Display Infrastructure Details
         if: always() && !cancelled() && github.ref == 'refs/heads/master'
         run: |
           echo "========================================"

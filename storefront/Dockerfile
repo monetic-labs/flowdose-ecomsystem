@@ -7,7 +7,7 @@ RUN npm install -g pnpm
 
 # Define build-time arguments
 ARG NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.flowdose.xyz
-ARG NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=Webshop
+ARG NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW
 ARG NEXT_PUBLIC_BASE_URL=https://store.flowdose.xyz
 
 # Copy package configuration files first

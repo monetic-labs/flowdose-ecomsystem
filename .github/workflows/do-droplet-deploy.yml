@@ -31,13 +31,153 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+        
+      - name: Create Docker Compose Files
+        run: |
+          # Create backend compose file if it doesn't exist
+          if [ ! -f "deploy/backend-compose.yml" ]; then
+            cat > deploy/backend-compose.yml << 'EOL'
+          version: '3.8'
+          services:
+            backend:
+              build:
+                context: ../backend
+                dockerfile: Dockerfile
+              environment:
+                - NODE_ENV=${ENVIRONMENT}
+                - DATABASE_URL=${DATABASE_URL}
+                - REDIS_URL=${REDIS_URL}
+                - PORT=9000
+                # CORS settings
+                - ADMIN_CORS=https://${ADMIN_DOMAIN},https://${STORE_DOMAIN}
+                - STORE_CORS=https://${STORE_DOMAIN}
+                - AUTH_CORS=https://${ADMIN_DOMAIN},https://${STORE_DOMAIN}
+                # Auth secrets
+                - JWT_SECRET=${JWT_SECRET}
+                - COOKIE_SECRET=${COOKIE_SECRET}
+                # Admin account
+                - MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}
+                - MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+                # Publishable Key
+                - MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+              restart: always
+              networks:
+                - flowdose-network
+
+            caddy:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./Caddyfile_backend:/etc/caddy/Caddyfile
+                - ../data/caddy_data:/data
+                - ../data/caddy_config:/config
+              depends_on:
+                - backend
+              networks:
+                - flowdose-network
+
+          networks:
+            flowdose-network:
+              external: true
+          EOL
+          fi
+          
+          # Create storefront compose file if it doesn't exist
+          if [ ! -f "deploy/storefront-compose.yml" ]; then
+            cat > deploy/storefront-compose.yml << 'EOL'
+          version: '3.8'
+          services:
+            storefront:
+              build:
+                context: ../storefront
+                dockerfile: Dockerfile
+              environment:
+                - NODE_ENV=${ENVIRONMENT}
+                # Use HTTPS for backend URL
+                - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
+                - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+                - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
+                - PORT=3000
+              restart: always
+              networks:
+                - flowdose-network
+
+            caddy:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./Caddyfile_storefront:/etc/caddy/Caddyfile
+                - ../data/caddy_data:/data
+                - ../data/caddy_config:/config
+              depends_on:
+                - storefront
+              networks:
+                - flowdose-network
+
+          networks:
+            flowdose-network:
+              external: true
+          EOL
+          fi
+        
       - name: Get Server IPs from Terraform Output
         id: get_ips
         working-directory: terraform
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+          DO_SPACES_ACCESS_KEY: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          DO_SPACES_SECRET_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          # Fallback IPs if Terraform state is inaccessible
+          FALLBACK_BACKEND_IP: ${{ vars.BACKEND_IP || '127.0.0.1' }}
+          FALLBACK_STOREFRONT_IP: ${{ vars.STOREFRONT_IP || '127.0.0.1' }}
         run: |
-          # Initialize Terraform to read state from remote backend
-          terraform init -backend-config="access_key=${{ secrets.DO_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET_KEY }}"
+          # Check if secrets exist
+          if [ -z "$DO_SPACES_ACCESS_KEY" ] || [ -z "$DO_SPACES_SECRET_KEY" ]; then
+            echo "WARNING: DigitalOcean Spaces credentials are missing!"
+            echo "Will attempt to use fallback IPs from repository variables."
+            
+            if [ "$FALLBACK_BACKEND_IP" = "127.0.0.1" ] || [ "$FALLBACK_STOREFRONT_IP" = "127.0.0.1" ]; then
+              echo "ERROR: No fallback IPs configured. Set BACKEND_IP and STOREFRONT_IP variables in the repository."
+              echo "can_deploy=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            echo "backend_ip=$FALLBACK_BACKEND_IP" >> $GITHUB_OUTPUT
+            echo "storefront_ip=$FALLBACK_STOREFRONT_IP" >> $GITHUB_OUTPUT
+            echo "can_deploy=true" >> $GITHUB_OUTPUT
+            
+            echo "Using Fallback Backend IP: $FALLBACK_BACKEND_IP"
+            echo "Using Fallback Storefront IP: $FALLBACK_STOREFRONT_IP"
+            exit 0
+          fi
           
+          echo "Initializing Terraform with backend credentials..."
+          # Initialize Terraform to read state from remote backend
+          if ! terraform init \
+            -backend-config="access_key=$DO_SPACES_ACCESS_KEY" \
+            -backend-config="secret_key=$DO_SPACES_SECRET_KEY"; then
+            
+            echo "WARNING: Failed to initialize Terraform backend. Using fallback IPs."
+            echo "backend_ip=$FALLBACK_BACKEND_IP" >> $GITHUB_OUTPUT
+            echo "storefront_ip=$FALLBACK_STOREFRONT_IP" >> $GITHUB_OUTPUT
+            echo "can_deploy=true" >> $GITHUB_OUTPUT
+            
+            echo "Using Fallback Backend IP: $FALLBACK_BACKEND_IP"
+            echo "Using Fallback Storefront IP: $FALLBACK_STOREFRONT_IP"
+            exit 0
+          fi
+          
+          echo "Checking Terraform state..."
           # Check if Terraform is currently executing (if a lock exists)
           if terraform force-unlock -force $(terraform state pull | jq -r '.serial') 2>/dev/null; then
             echo "Terraform state is locked. Skipping deployment."
@@ -51,9 +191,9 @@ jobs:
           
           # Check if both IPs exist
           if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
-            echo "Infrastructure not fully provisioned yet. Skipping deployment."
-            echo "can_deploy=false" >> $GITHUB_OUTPUT
-            exit 0
+            echo "Infrastructure not fully provisioned yet. Using fallback IPs."
+            BACKEND_IP=$FALLBACK_BACKEND_IP
+            STOREFRONT_IP=$FALLBACK_STOREFRONT_IP
           fi
           
           # Output these values for other jobs
@@ -63,8 +203,6 @@ jobs:
           
           echo "Using Backend IP: $BACKEND_IP"
           echo "Using Storefront IP: $STOREFRONT_IP"
-        env:
-          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
 
   deploy:
     needs: prepare_deployment
@@ -93,6 +231,24 @@ jobs:
       
       - name: Create Caddy config files
         run: |
+          # Ensure deploy directory exists
+          mkdir -p deploy
+          
+          # Create template files if they don't exist
+          if [ ! -f "deploy/Caddyfile_backend.template" ]; then
+            echo '${ADMIN_DOMAIN} {
+                reverse_proxy backend:9000
+                tls ${ADMIN_EMAIL_FOR_CERTS}
+            }' > deploy/Caddyfile_backend.template
+          fi
+          
+          if [ ! -f "deploy/Caddyfile_storefront.template" ]; then
+            echo '${STORE_DOMAIN} {
+                reverse_proxy storefront:3000
+                tls ${ADMIN_EMAIL_FOR_CERTS}
+            }' > deploy/Caddyfile_storefront.template
+          fi
+          
           # Create Caddyfile for backend from template
           cat deploy/Caddyfile_backend.template | \
             sed "s|\${ADMIN_DOMAIN}|admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}|g" | \

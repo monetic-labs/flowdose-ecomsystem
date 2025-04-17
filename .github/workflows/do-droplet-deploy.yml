@@ -172,13 +172,29 @@ jobs:
           fi
           
           echo "Initializing Terraform with backend credentials..."
-          # Initialize Terraform to read state from remote backend
-          if ! terraform init \
-            -backend-config="access_key=$DO_SPACES_ACCESS_KEY" \
-            -backend-config="secret_key=$DO_SPACES_SECRET_KEY" 2>&1 | tee terraform_init.log; then
+          # Create backend override file
+          cat > backend_override.tf << EOL
+          terraform {
+            backend "s3" {
+              endpoint                    = "https://sfo3.digitaloceanspaces.com"
+              bucket                      = "flowdose-state-storage"
+              key                         = "flowdose/terraform.tfstate"
+              region                      = "us-east-1"
+              skip_credentials_validation = true
+              skip_metadata_api_check     = true
+              skip_region_validation      = true
+              force_path_style            = false
+              access_key                  = "$DO_SPACES_ACCESS_KEY"
+              secret_key                  = "$DO_SPACES_SECRET_KEY"
+            }
+          }
+          EOL
+          
+          # Initialize Terraform with explicit backend config
+          if ! terraform init -reconfigure 2>&1 | tee terraform_init.log; then
             
             # Check if the error is about the bucket not existing (bootstrap not done)
-            if grep -q "S3 bucket does not exist" terraform_init.log; then
+            if grep -q "bucket does not exist" terraform_init.log; then
               echo "WARNING: Terraform state bucket does not exist. Bootstrap process not completed."
               echo "Please run the terraform-bootstrap.yml workflow first, or set up fallback IPs."
             fi

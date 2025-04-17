@@ -52,9 +52,10 @@ jobs:
         env:
           TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
       
-      - name: Add provider credentials file
+      - name: Update provider credentials
         run: |
-          cat > provider.tf << EOL
+          # Create provider credentials file
+          cat > provider-creds.tf << EOL
           provider "digitalocean" {
             token             = "${{ secrets.DO_API_TOKEN }}"
             spaces_access_id  = "${{ secrets.DO_SPACES_ACCESS_KEY }}"
@@ -64,13 +65,13 @@ jobs:
         working-directory: terraform/bootstrap
       
       - name: Terraform Plan
-        run: terraform plan -input=false
+        run: terraform plan -input=false -var="skip_bucket_creation=true"
         working-directory: terraform/bootstrap
         env:
           TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
       
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false
+        run: terraform apply -auto-approve -input=false -var="skip_bucket_creation=true"
         working-directory: terraform/bootstrap
         env:
           TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}

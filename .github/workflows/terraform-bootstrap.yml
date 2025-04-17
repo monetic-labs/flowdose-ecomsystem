@@ -49,6 +49,19 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
         working-directory: terraform/bootstrap
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_API_TOKEN }}
+      
+      - name: Add provider credentials file
+        run: |
+          cat > provider.tf << EOL
+          provider "digitalocean" {
+            token             = "${{ secrets.DO_API_TOKEN }}"
+            spaces_access_id  = "${{ secrets.DO_SPACES_ACCESS_KEY }}"
+            spaces_secret_key = "${{ secrets.DO_SPACES_SECRET_KEY }}"
+          }
+          EOL
+        working-directory: terraform/bootstrap
       
       - name: Terraform Plan
         run: terraform plan -input=false

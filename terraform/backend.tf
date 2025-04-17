@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     endpoint                    = "https://sfo3.digitaloceanspaces.com"
-    bucket                      = "flowdose-terraform-state"
+    bucket                      = "flowdose-state-storage"
     key                         = "flowdose/terraform.tfstate"
     region                      = "us-east-1" # Required but not used for DO
     skip_credentials_validation = true

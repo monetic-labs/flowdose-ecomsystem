@@ -36,6 +36,16 @@ jobs:
         with:
           terraform_version: 1.5.0
         
+      - name: Set Terraform Provider Credentials
+        run: |
+          cat > terraform/provider.tf << EOL
+          provider "digitalocean" {
+            token             = "${{ secrets.DO_API_TOKEN }}"
+            spaces_access_id  = "${{ secrets.DO_SPACES_ACCESS_KEY }}"
+            spaces_secret_key = "${{ secrets.DO_SPACES_SECRET_KEY }}"
+          }
+          EOL
+        
       - name: Create Docker Compose Files
         run: |
           # Create backend compose file if it doesn't exist
@@ -165,7 +175,13 @@ jobs:
           # Initialize Terraform to read state from remote backend
           if ! terraform init \
             -backend-config="access_key=$DO_SPACES_ACCESS_KEY" \
-            -backend-config="secret_key=$DO_SPACES_SECRET_KEY"; then
+            -backend-config="secret_key=$DO_SPACES_SECRET_KEY" 2>&1 | tee terraform_init.log; then
+            
+            # Check if the error is about the bucket not existing (bootstrap not done)
+            if grep -q "S3 bucket does not exist" terraform_init.log; then
+              echo "WARNING: Terraform state bucket does not exist. Bootstrap process not completed."
+              echo "Please run the terraform-bootstrap.yml workflow first, or set up fallback IPs."
+            fi
             
             echo "WARNING: Failed to initialize Terraform backend. Using fallback IPs."
             echo "backend_ip=$FALLBACK_BACKEND_IP" >> $GITHUB_OUTPUT

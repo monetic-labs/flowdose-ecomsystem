@@ -81,3 +81,12 @@ terraform/bootstrap/deploy.sh
 # Archive of old configurations
 archive/
 archive/**/*
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*tfvars
+*-creds.tf
+*_override.tf
+*.plan

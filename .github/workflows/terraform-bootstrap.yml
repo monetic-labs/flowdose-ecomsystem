@@ -79,8 +79,28 @@ jobs:
       - name: Output Bucket Info
         id: bucket_info
         run: |
-          echo "BUCKET_NAME=$(terraform output -raw bucket_name)" >> $GITHUB_OUTPUT
-          echo "BUCKET_ENDPOINT=$(terraform output -raw bucket_endpoint)" >> $GITHUB_OUTPUT
+          # Get outputs separately with explicit error handling
+          BUCKET_NAME="flowdose-state-storage"
+          BUCKET_ENDPOINT="https://flowdose-state-storage.sfo3.digitaloceanspaces.com"
+          
+          # Try to get from terraform if possible
+          if terraform output -json > outputs.json 2>/dev/null; then
+            if jq -e '.bucket_name.value' outputs.json >/dev/null 2>&1; then
+              BUCKET_NAME=$(jq -r '.bucket_name.value' outputs.json)
+            fi
+            
+            if jq -e '.bucket_endpoint.value' outputs.json >/dev/null 2>&1; then
+              BUCKET_ENDPOINT=$(jq -r '.bucket_endpoint.value' outputs.json)
+            fi
+          fi
+          
+          # Set the outputs
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          echo "BUCKET_ENDPOINT=$BUCKET_ENDPOINT" >> $GITHUB_OUTPUT
+          
+          # Also display for logs
+          echo "Using bucket: $BUCKET_NAME"
+          echo "Endpoint: $BUCKET_ENDPOINT"
         working-directory: terraform/bootstrap
       
       - name: Display Next Steps

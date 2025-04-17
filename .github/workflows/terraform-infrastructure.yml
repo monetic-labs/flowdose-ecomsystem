@@ -59,6 +59,21 @@ jobs:
           if [ -n "$DO_SSH_PUBLIC_KEY" ]; then echo "DO_SSH_PUBLIC_KEY is available"; else echo "DO_SSH_PUBLIC_KEY is missing"; fi
           if [ -n "$DO_SPACES_ACCESS_KEY" ]; then echo "DO_SPACES_ACCESS_KEY is available"; else echo "DO_SPACES_ACCESS_KEY is missing"; fi
           if [ -n "$DO_SPACES_SECRET_KEY" ]; then echo "DO_SPACES_SECRET_KEY is available"; else echo "DO_SPACES_SECRET_KEY is missing"; fi
+          
+          # Show DigitalOcean account info
+          if [ -n "$DO_API_TOKEN" ]; then
+            echo "Testing DigitalOcean API access..."
+            curl -s -X GET \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DO_API_TOKEN" \
+              "https://api.digitalocean.com/v2/account" | jq '.account.email' || echo "Failed to access DO API"
+            
+            echo "Checking SSH keys in DO account..."
+            curl -s -X GET \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DO_API_TOKEN" \
+              "https://api.digitalocean.com/v2/account/keys" | jq '.meta.total + " SSH keys found"' || echo "Failed to get SSH keys"
+          fi
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
           DO_SSH_PUBLIC_KEY: ${{ secrets.DO_SSH_PUBLIC_KEY }}

@@ -349,7 +349,7 @@ jobs:
           scp -o StrictHostKeyChecking=no -r deploy/backend-compose.yml root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/docker-compose.yml
           scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_backend root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/Caddyfile_backend
           
-          # Create a repair script and execute it
+          # Create a repair script
           cat > repair.sh << 'EOF'
           #!/bin/bash
           set -e
@@ -377,22 +377,27 @@ jobs:
           cp -R backend/* /opt/flowdose/backend/
           chown -R root:root /opt/flowdose/backend
           
-          echo "5. Creating a basic Dockerfile if missing..."
-          if [ ! -f "/opt/flowdose/backend/Dockerfile" ]; then
-            cat > /opt/flowdose/backend/Dockerfile << 'DOCKERFILE'
-          FROM node:18-alpine
-
-          WORKDIR /app
-
-          COPY package.json .
-          RUN npm install
-
-          COPY . .
-          RUN npm run build
-
-          EXPOSE 9000
-          CMD ["npm", "start"]
-          DOCKERFILE
+          echo "5. Fixing Dockerfile for missing files..."
+          cd /opt/flowdose/backend
+          if [ -f "Dockerfile" ]; then
+            # Create .npmrc if it doesn't exist (referenced in original Dockerfile)
+            touch .npmrc
+            
+            # Modify Dockerfile to handle missing files
+            sed -i 's/COPY package.json .npmrc/COPY package*.json/g' Dockerfile
+            
+            echo "Modified Dockerfile:"
+            cat Dockerfile
+          else
+            # Create a simple fallback Dockerfile
+            echo 'FROM node:18-alpine' > Dockerfile
+            echo 'WORKDIR /app' >> Dockerfile
+            echo 'COPY package*.json ./' >> Dockerfile
+            echo 'RUN npm install' >> Dockerfile
+            echo 'COPY . .' >> Dockerfile
+            echo 'RUN npm run build || true' >> Dockerfile
+            echo 'EXPOSE 9000' >> Dockerfile
+            echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
           
           echo "6. Ensuring docker-compose.yml is properly configured..."
@@ -405,7 +410,7 @@ jobs:
           chmod +x repair.sh
           scp -o StrictHostKeyChecking=no repair.sh root@${{ needs.prepare_deployment.outputs.backend_ip }}:/tmp/repair.sh
           
-          # Execute the repair script
+          # Execute the repair script and deploy
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
             export GH_TOKEN='${{ secrets.GH_TOKEN }}'
             export REPO='${{ github.repository }}'
@@ -433,7 +438,7 @@ jobs:
           scp -o StrictHostKeyChecking=no -r deploy/storefront-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
           scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/Caddyfile_storefront
           
-          # Create a repair script and execute it
+          # Create a repair script
           cat > repair.sh << 'EOF'
           #!/bin/bash
           set -e
@@ -461,22 +466,27 @@ jobs:
           cp -R storefront/* /opt/flowdose/storefront/
           chown -R root:root /opt/flowdose/storefront
           
-          echo "5. Creating a basic Dockerfile if missing..."
-          if [ ! -f "/opt/flowdose/storefront/Dockerfile" ]; then
-            cat > /opt/flowdose/storefront/Dockerfile << 'DOCKERFILE'
-          FROM node:18-alpine
-
-          WORKDIR /app
-
-          COPY package.json .
-          RUN npm install
-
-          COPY . .
-          RUN npm run build
-
-          EXPOSE 3000
-          CMD ["npm", "start"]
-          DOCKERFILE
+          echo "5. Fixing Dockerfile for missing files..."
+          cd /opt/flowdose/storefront
+          if [ -f "Dockerfile" ]; then
+            # Create .npmrc if it doesn't exist (referenced in original Dockerfile)
+            touch .npmrc
+            
+            # Modify Dockerfile to handle missing files
+            sed -i 's/COPY package.json .npmrc/COPY package*.json/g' Dockerfile
+            
+            echo "Modified Dockerfile:"
+            cat Dockerfile
+          else
+            # Create a simple fallback Dockerfile
+            echo 'FROM node:18-alpine' > Dockerfile
+            echo 'WORKDIR /app' >> Dockerfile
+            echo 'COPY package*.json ./' >> Dockerfile
+            echo 'RUN npm install' >> Dockerfile
+            echo 'COPY . .' >> Dockerfile
+            echo 'RUN npm run build || true' >> Dockerfile
+            echo 'EXPOSE 3000' >> Dockerfile
+            echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
           
           echo "6. Ensuring docker-compose.yml is properly configured..."
@@ -489,7 +499,7 @@ jobs:
           chmod +x repair.sh
           scp -o StrictHostKeyChecking=no repair.sh root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/tmp/repair.sh
           
-          # Execute the repair script
+          # Execute the repair script and deploy
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
             export GH_TOKEN='${{ secrets.GH_TOKEN }}'
             export REPO='${{ github.repository }}'

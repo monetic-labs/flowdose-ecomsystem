@@ -24,11 +24,11 @@ export default async function userInviteHandler({
       template: EmailTemplates.INVITE_USER,
       data: {
         emailOptions: {
-          replyTo: 'devinjelliot@gmail.com',
-          subject: "You've been invited to Medusa!"
+          replyTo: 'support@flowdose.xyz',
+          subject: "You've been invited to join Flowdose Admin"
         },
         inviteLink: `${BACKEND_URL}/app/invite?token=${invite.token}`,
-        preview: 'The administration dashboard awaits...'
+        preview: 'Your admin dashboard invitation awaits'
       }
     })
     console.log(`Successfully sent invite email to ${invite.email}`)

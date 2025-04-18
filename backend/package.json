@@ -19,7 +19,9 @@
     "start": "mkdir -p .medusa/server && cp -f medusa-config.js .medusa/server/ && init-backend && cd .medusa/server && medusa start --verbose",
     "dev": "medusa develop",
     "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002",
-    "init": "bash src/scripts/init-backend.sh"
+    "init": "bash src/scripts/init-backend.sh",
+    "verify-resend": "node scripts/verify-resend.js",
+    "create-invite": "node scripts/create-invite.js"
   },
   "dependencies": {
     "@medusajs/admin-sdk": "latest",
@@ -37,6 +39,7 @@
     "@react-email/components": "^0.0.26",
     "@rokmohar/medusa-plugin-meilisearch": "^1.0.6",
     "awilix": "^8.0.1",
+    "dotenv": "^16.5.0",
     "medusajs-launch-utils": "^0.0.15",
     "minio": "^8.0.5",
     "pg": "^8.14.1",

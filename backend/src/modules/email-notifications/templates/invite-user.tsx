@@ -33,24 +33,24 @@ export const isInviteUserData = (data: any): data is InviteUserEmailProps =>
  */
 export const InviteUserEmail = ({
   inviteLink,
-  preview = `You've been invited to Medusa!`,
+  preview = `You've been invited to Flowdose!`,
 }: InviteUserEmailProps) => {
   return (
     <Base preview={preview}>
       <Section className="mt-[32px]">
         <Img
-          src="https://user-images.githubusercontent.com/59018053/229103275-b5e482bb-4601-46e6-8142-244f531cebdb.svg"
-          alt="Medusa"
+          src="https://flowdose.xyz/logo.png"
+          alt="Flowdose"
           className="mx-auto w-28"
         />
       </Section>
       <Section className="text-center">
         <Text className="text-black text-[14px] leading-[24px]">
-          You&apos;ve been invited to be an administrator on <strong>Medusa</strong>.
+          You&apos;ve been invited to be an administrator on <strong>Flowdose</strong>.
         </Text>
         <Section className="mt-4 mb-[32px]">
           <Button
-            className="bg-[#000000] rounded text-white text-[12px] font-semibold no-underline px-5 py-3"
+            className="bg-[#5E35B1] rounded text-white text-[12px] font-semibold no-underline px-5 py-3"
             href={inviteLink}
           >
             Accept Invitation
@@ -83,7 +83,7 @@ export const InviteUserEmail = ({
 }
 
 InviteUserEmail.PreviewProps = {
-  inviteLink: 'https://mywebsite.com/app/invite?token=abc123ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+  inviteLink: 'https://admin.flowdose.xyz/invite?token=abc123'
 } as InviteUserEmailProps
 
 export default InviteUserEmail

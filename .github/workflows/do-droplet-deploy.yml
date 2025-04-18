@@ -264,6 +264,50 @@ jobs:
           ssh-keyscan -H ${{ needs.prepare_deployment.outputs.backend_ip }} >> ~/.ssh/known_hosts
           ssh-keyscan -H ${{ needs.prepare_deployment.outputs.storefront_ip }} >> ~/.ssh/known_hosts
       
+      - name: Diagnose Server Environment
+        run: |
+          echo "===== DIAGNOSING BACKEND SERVER ====="
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
+            echo 'Current directory structure:'
+            find /opt/flowdose -type d | sort
+            
+            echo -e '\nDocker status:'
+            docker ps -a
+            
+            echo -e '\nDirectory contents:'
+            ls -la /opt/flowdose/
+            
+            echo -e '\nChecking Dockerfile locations:'
+            find /opt -name Dockerfile
+            
+            echo -e '\nDisplay backend-compose.yml content:'
+            cat /opt/flowdose/docker-compose.yml || echo 'File not found'
+            
+            echo -e '\nChecking if folder is git repo:'
+            cd /opt/flowdose && git status || echo 'Not a git repo'
+          "
+          
+          echo "===== DIAGNOSING STOREFRONT SERVER ====="
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
+            echo 'Current directory structure:'
+            find /opt/flowdose -type d | sort
+            
+            echo -e '\nDocker status:'
+            docker ps -a
+            
+            echo -e '\nDirectory contents:'
+            ls -la /opt/flowdose/
+            
+            echo -e '\nChecking Dockerfile locations:'
+            find /opt -name Dockerfile
+            
+            echo -e '\nDisplay storefront-compose.yml content:'
+            cat /opt/flowdose/docker-compose.yml || echo 'File not found'
+            
+            echo -e '\nChecking if folder is git repo:'
+            cd /opt/flowdose && git status || echo 'Not a git repo'
+          "
+      
       - name: Wait for any infrastructure changes to complete
         run: sleep 60  # Give Terraform user_data scripts time to complete
       
@@ -305,33 +349,69 @@ jobs:
           scp -o StrictHostKeyChecking=no -r deploy/backend-compose.yml root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/docker-compose.yml
           scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_backend root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/Caddyfile_backend
           
-          # Now deploy with environment variables
+          # Create a repair script and execute it
+          cat > repair.sh << 'EOF'
+          #!/bin/bash
+          set -e
+
+          echo "=== Starting Backend Deployment Repair ==="
+          cd /opt/flowdose
+          
+          echo "1. Fixing directory structure..."
+          mkdir -p data/caddy_data data/caddy_config
+          
+          echo "2. Creating fresh backend directory..."
+          rm -rf /opt/flowdose/backend.bak
+          if [ -d "/opt/flowdose/backend" ]; then
+            mv /opt/flowdose/backend /opt/flowdose/backend.bak
+          fi
+          mkdir -p /opt/flowdose/backend
+          
+          echo "3. Cloning repository to temp location..."
+          rm -rf /tmp/repo-clone
+          mkdir -p /tmp/repo-clone
+          cd /tmp/repo-clone
+          git clone https://${GH_TOKEN}@github.com/${REPO}.git .
+          
+          echo "4. Copying backend files with correct ownership..."
+          cp -R backend/* /opt/flowdose/backend/
+          chown -R root:root /opt/flowdose/backend
+          
+          echo "5. Creating a basic Dockerfile if missing..."
+          if [ ! -f "/opt/flowdose/backend/Dockerfile" ]; then
+            cat > /opt/flowdose/backend/Dockerfile << 'DOCKERFILE'
+          FROM node:18-alpine
+
+          WORKDIR /app
+
+          COPY package.json .
+          RUN npm install
+
+          COPY . .
+          RUN npm run build
+
+          EXPOSE 9000
+          CMD ["npm", "start"]
+          DOCKERFILE
+          fi
+          
+          echo "6. Ensuring docker-compose.yml is properly configured..."
+          cd /opt/flowdose
+          sed -i 's|context: ../backend|context: ./backend|g' docker-compose.yml
+
+          echo "=== Deployment repair complete ==="
+          EOF
+          
+          chmod +x repair.sh
+          scp -o StrictHostKeyChecking=no repair.sh root@${{ needs.prepare_deployment.outputs.backend_ip }}:/tmp/repair.sh
+          
+          # Execute the repair script
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
-            # Create directory if it doesn't exist
-            mkdir -p /opt/flowdose
-            cd /opt/flowdose
+            export GH_TOKEN='${{ secrets.GH_TOKEN }}'
+            export REPO='${{ github.repository }}'
+            bash /tmp/repair.sh
             
-            # Check if it's a git repository, if not, clone it
-            if [ ! -d '.git' ]; then
-              echo 'Not a git repository. Cloning...'
-              # Save any existing files
-              mkdir -p /tmp/flowdose-backup
-              cp -r * /tmp/flowdose-backup/ 2>/dev/null || true
-              # Clone the repo with token authentication
-              git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git .
-              # Restore deployment files
-              cp -f /tmp/flowdose-backup/docker-compose.yml . 2>/dev/null || true
-              cp -f /tmp/flowdose-backup/Caddyfile_backend . 2>/dev/null || true
-            else
-              # For existing repositories, temporarily configure token auth for pull
-              git config --local credential.helper store
-              echo 'https://${{ secrets.GH_TOKEN }}@github.com' > ~/.git-credentials
-              git pull
-              # Clean up credentials after pull
-              rm ~/.git-credentials
-              git config --local --unset credential.helper
-            fi &&
-            
+            cd /opt/flowdose && 
             export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
             export DATABASE_URL='${{ secrets.DATABASE_URL }}' &&
             export REDIS_URL='${{ secrets.REDIS_URL }}' &&
@@ -353,33 +433,69 @@ jobs:
           scp -o StrictHostKeyChecking=no -r deploy/storefront-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
           scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/Caddyfile_storefront
           
-          # Now deploy with environment variables
+          # Create a repair script and execute it
+          cat > repair.sh << 'EOF'
+          #!/bin/bash
+          set -e
+
+          echo "=== Starting Storefront Deployment Repair ==="
+          cd /opt/flowdose
+          
+          echo "1. Fixing directory structure..."
+          mkdir -p data/caddy_data data/caddy_config
+          
+          echo "2. Creating fresh storefront directory..."
+          rm -rf /opt/flowdose/storefront.bak
+          if [ -d "/opt/flowdose/storefront" ]; then
+            mv /opt/flowdose/storefront /opt/flowdose/storefront.bak
+          fi
+          mkdir -p /opt/flowdose/storefront
+          
+          echo "3. Cloning repository to temp location..."
+          rm -rf /tmp/repo-clone
+          mkdir -p /tmp/repo-clone
+          cd /tmp/repo-clone
+          git clone https://${GH_TOKEN}@github.com/${REPO}.git .
+          
+          echo "4. Copying storefront files with correct ownership..."
+          cp -R storefront/* /opt/flowdose/storefront/
+          chown -R root:root /opt/flowdose/storefront
+          
+          echo "5. Creating a basic Dockerfile if missing..."
+          if [ ! -f "/opt/flowdose/storefront/Dockerfile" ]; then
+            cat > /opt/flowdose/storefront/Dockerfile << 'DOCKERFILE'
+          FROM node:18-alpine
+
+          WORKDIR /app
+
+          COPY package.json .
+          RUN npm install
+
+          COPY . .
+          RUN npm run build
+
+          EXPOSE 3000
+          CMD ["npm", "start"]
+          DOCKERFILE
+          fi
+          
+          echo "6. Ensuring docker-compose.yml is properly configured..."
+          cd /opt/flowdose
+          sed -i 's|context: ../storefront|context: ./storefront|g' docker-compose.yml
+
+          echo "=== Deployment repair complete ==="
+          EOF
+          
+          chmod +x repair.sh
+          scp -o StrictHostKeyChecking=no repair.sh root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/tmp/repair.sh
+          
+          # Execute the repair script
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
-            # Create directory if it doesn't exist
-            mkdir -p /opt/flowdose
-            cd /opt/flowdose
+            export GH_TOKEN='${{ secrets.GH_TOKEN }}'
+            export REPO='${{ github.repository }}'
+            bash /tmp/repair.sh
             
-            # Check if it's a git repository, if not, clone it
-            if [ ! -d '.git' ]; then
-              echo 'Not a git repository. Cloning...'
-              # Save any existing files
-              mkdir -p /tmp/flowdose-backup
-              cp -r * /tmp/flowdose-backup/ 2>/dev/null || true
-              # Clone the repo with token authentication
-              git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git .
-              # Restore deployment files
-              cp -f /tmp/flowdose-backup/docker-compose.yml . 2>/dev/null || true
-              cp -f /tmp/flowdose-backup/Caddyfile_storefront . 2>/dev/null || true
-            else
-              # For existing repositories, temporarily configure token auth for pull
-              git config --local credential.helper store
-              echo 'https://${{ secrets.GH_TOKEN }}@github.com' > ~/.git-credentials
-              git pull
-              # Clean up credentials after pull
-              rm ~/.git-credentials
-              git config --local --unset credential.helper
-            fi &&
-            
+            cd /opt/flowdose && 
             export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
             export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
             export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&

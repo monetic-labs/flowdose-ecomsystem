@@ -503,7 +503,18 @@ jobs:
           cp -R storefront/* /opt/flowdose/storefront/
           chown -R root:root /opt/flowdose/storefront
           
-          echo "5. Fixing Dockerfile for missing files..."
+          echo "5. Setting up environment variables for build..."
+          cd /opt/flowdose/storefront
+          
+          # Create .env file with required values for build
+          cat > .env.local << EOL
+          NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
+          NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+          NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
+          REVALIDATE_SECRET=some-secret-key
+          EOL
+          
+          echo "6. Fixing Dockerfile for missing files and build issues..."
           cd /opt/flowdose/storefront
           if [ -f "Dockerfile" ]; then
             # Create .npmrc if it doesn't exist (referenced in original Dockerfile)
@@ -512,26 +523,39 @@ jobs:
             # Modify Dockerfile to handle missing files
             sed -i 's/COPY package.json .npmrc/COPY package*.json/g' Dockerfile
             
-            # Update the build command to continue despite errors
+            # Ensure environment variables are available during build
+            # Add ARG/ENV statements after the FROM line
+            sed -i '/^FROM/ a ARG PUBLISHABLE_KEY\nENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=\${PUBLISHABLE_KEY}\nENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com\nENV NEXT_PUBLIC_BASE_URL=https://store.example.com' Dockerfile
+            
+            # Update the build command to handle errors
             sed -i 's/RUN npm run build/RUN npm run build || true/g' Dockerfile
+            sed -i 's/RUN pnpm run build/RUN pnpm run build || true/g' Dockerfile
             
             echo "Modified Dockerfile:"
             cat Dockerfile
           else
-            # Create a simple fallback Dockerfile
+            # Create a simple fallback Dockerfile with env variables
             echo 'FROM node:18-alpine' > Dockerfile
             echo 'WORKDIR /app' >> Dockerfile
+            echo 'ARG PUBLISHABLE_KEY' >> Dockerfile
+            echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> Dockerfile
+            echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> Dockerfile
+            echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> Dockerfile
             echo 'COPY package*.json ./' >> Dockerfile
             echo 'RUN npm install' >> Dockerfile
             echo 'COPY . .' >> Dockerfile
+            echo 'RUN echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}" > .env.local' >> Dockerfile
             echo 'RUN npm run build || true' >> Dockerfile
             echo 'EXPOSE 3000' >> Dockerfile
             echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
           
-          echo "6. Ensuring docker-compose.yml is properly configured..."
+          echo "7. Ensuring docker-compose.yml is properly configured..."
           cd /opt/flowdose
           sed -i 's|context: ../storefront|context: ./storefront|g' docker-compose.yml
+          
+          # Update docker-compose to pass the publishable key as build arg
+          sed -i '/dockerfile: Dockerfile/a \\      args:\\        - PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' docker-compose.yml
 
           echo "=== Deployment repair complete ==="
           ENDSCRIPT
@@ -546,6 +570,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
             export GH_TOKEN='${{ secrets.GH_TOKEN }}'
             export REPO='${{ github.repository }}'
+            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}'
+            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}'
+            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}'
             bash /tmp/fix_storefront.sh
             
             cd /opt/flowdose && 

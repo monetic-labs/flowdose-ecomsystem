@@ -638,11 +638,11 @@ jobs:
           echo 'echo "Modifying Next.js build command to skip page data collection"' >> deploy_files/deploy.sh
           echo 'if [ -f "package.json" ]; then' >> deploy_files/deploy.sh
           echo '  echo "Original build scripts:"' >> deploy_files/deploy.sh
-          echo '  grep -A 5 \\"scripts\\" package.json' >> deploy_files/deploy.sh
+          echo '  grep -A 5 "scripts" package.json' >> deploy_files/deploy.sh
           echo '  # Add custom build script that skips problematic pages' >> deploy_files/deploy.sh
-          echo '  sed -i "s/\\"build\\": \\"next build\\"/\\"build\\": \\"NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true next build\\"/g" package.json' >> deploy_files/deploy.sh
+          echo '  sed -i "s/\"build\": \"next build\"/\"build\": \"NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true next build\"/g" package.json' >> deploy_files/deploy.sh
           echo '  echo "Modified build scripts:"' >> deploy_files/deploy.sh
-          echo '  grep -A 5 \\"scripts\\" package.json' >> deploy_files/deploy.sh
+          echo '  grep -A 5 "scripts" package.json' >> deploy_files/deploy.sh
           echo 'fi' >> deploy_files/deploy.sh
           
           # Add back the docker compose commands

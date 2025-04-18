@@ -247,6 +247,7 @@ jobs:
     if: needs.prepare_deployment.outputs.can_deploy == 'true'
     env:
       DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -306,8 +307,31 @@ jobs:
           
           # Now deploy with environment variables
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
-            cd /opt/flowdose && 
-            git pull &&
+            # Create directory if it doesn't exist
+            mkdir -p /opt/flowdose
+            cd /opt/flowdose
+            
+            # Check if it's a git repository, if not, clone it
+            if [ ! -d '.git' ]; then
+              echo 'Not a git repository. Cloning...'
+              # Save any existing files
+              mkdir -p /tmp/flowdose-backup
+              cp -r * /tmp/flowdose-backup/ 2>/dev/null || true
+              # Clone the repo with token authentication
+              git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git .
+              # Restore deployment files
+              cp -f /tmp/flowdose-backup/docker-compose.yml . 2>/dev/null || true
+              cp -f /tmp/flowdose-backup/Caddyfile_backend . 2>/dev/null || true
+            else
+              # For existing repositories, temporarily configure token auth for pull
+              git config --local credential.helper store
+              echo 'https://${{ secrets.GH_TOKEN }}@github.com' > ~/.git-credentials
+              git pull
+              # Clean up credentials after pull
+              rm ~/.git-credentials
+              git config --local --unset credential.helper
+            fi &&
+            
             export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
             export DATABASE_URL='${{ secrets.DATABASE_URL }}' &&
             export REDIS_URL='${{ secrets.REDIS_URL }}' &&
@@ -318,7 +342,7 @@ jobs:
             export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
             export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
             export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
-            docker compose down &&
+            docker compose down || true &&
             docker compose build --no-cache &&
             docker compose up -d
           "
@@ -331,13 +355,36 @@ jobs:
           
           # Now deploy with environment variables
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
-            cd /opt/flowdose && 
-            git pull &&
+            # Create directory if it doesn't exist
+            mkdir -p /opt/flowdose
+            cd /opt/flowdose
+            
+            # Check if it's a git repository, if not, clone it
+            if [ ! -d '.git' ]; then
+              echo 'Not a git repository. Cloning...'
+              # Save any existing files
+              mkdir -p /tmp/flowdose-backup
+              cp -r * /tmp/flowdose-backup/ 2>/dev/null || true
+              # Clone the repo with token authentication
+              git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git .
+              # Restore deployment files
+              cp -f /tmp/flowdose-backup/docker-compose.yml . 2>/dev/null || true
+              cp -f /tmp/flowdose-backup/Caddyfile_storefront . 2>/dev/null || true
+            else
+              # For existing repositories, temporarily configure token auth for pull
+              git config --local credential.helper store
+              echo 'https://${{ secrets.GH_TOKEN }}@github.com' > ~/.git-credentials
+              git pull
+              # Clean up credentials after pull
+              rm ~/.git-credentials
+              git config --local --unset credential.helper
+            fi &&
+            
             export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
             export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
             export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
             export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
-            docker compose down &&
+            docker compose down || true &&
             docker compose build --no-cache &&
             docker compose up -d
           " 

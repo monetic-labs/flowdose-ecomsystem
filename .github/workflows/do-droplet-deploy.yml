@@ -282,9 +282,9 @@ jobs:
           load: true
           tags: flowdose-storefront:latest
           build-args: |
-            NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}
+            NEXT_PUBLIC_MEDUSA_BACKEND_URL=${{ secrets.DOMAIN_NAME && format('https://admin.{0}', secrets.DOMAIN_NAME) || format('http://{0}:9000', needs.prepare_deployment.outputs.backend_ip) }}
             NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${{ secrets.PUBLISHABLE_KEY }}
-            NEXT_PUBLIC_BASE_URL=https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+            NEXT_PUBLIC_BASE_URL=${{ secrets.DOMAIN_NAME && format('https://store.{0}', secrets.DOMAIN_NAME) || format('http://{0}:3000', needs.prepare_deployment.outputs.storefront_ip) }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       
@@ -339,9 +339,9 @@ jobs:
           
           # Create Caddyfile for backend
           cat > deploy/Caddyfile_backend << EOF
-          admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }} {
+          ${{ secrets.DOMAIN_NAME && format('admin.{0}', secrets.DOMAIN_NAME) || format('{0}:80', needs.prepare_deployment.outputs.backend_ip) }} {
               reverse_proxy backend:9000
-              tls ${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}
+              ${{ secrets.DOMAIN_NAME && 'tls ' }}${{ secrets.DOMAIN_NAME && (secrets.ADMIN_EMAIL || 'admin@flowdose.xyz') }}
           }
           EOF
       
@@ -357,9 +357,9 @@ jobs:
                 DATABASE_URL: ${{ secrets.DATABASE_URL }}
                 REDIS_URL: ${{ secrets.REDIS_URL }}
                 PORT: 9000
-                ADMIN_CORS: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }},https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
-                STORE_CORS: https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
-                AUTH_CORS: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }},https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                ADMIN_CORS: ${{ secrets.DOMAIN_NAME && format('https://admin.{0},https://store.{0}', secrets.DOMAIN_NAME) || format('http://{0}:9000,http://{1}:3000', needs.prepare_deployment.outputs.backend_ip, needs.prepare_deployment.outputs.storefront_ip) }}
+                STORE_CORS: ${{ secrets.DOMAIN_NAME && format('https://store.{0}', secrets.DOMAIN_NAME) || format('http://{0}:3000', needs.prepare_deployment.outputs.storefront_ip) }}
+                AUTH_CORS: ${{ secrets.DOMAIN_NAME && format('https://admin.{0},https://store.{0}', secrets.DOMAIN_NAME) || format('http://{0}:9000,http://{1}:3000', needs.prepare_deployment.outputs.backend_ip, needs.prepare_deployment.outputs.storefront_ip) }}
                 JWT_SECRET: ${{ secrets.JWT_SECRET }}
                 COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
                 MEDUSA_ADMIN_EMAIL: admin@flowdose.xyz
@@ -448,9 +448,9 @@ jobs:
           
           # Create Caddyfile for storefront
           cat > deploy/Caddyfile_storefront << EOF
-          store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }} {
+          ${{ secrets.DOMAIN_NAME && format('store.{0}', secrets.DOMAIN_NAME) || format('{0}:80', needs.prepare_deployment.outputs.storefront_ip) }} {
               reverse_proxy storefront:3000
-              tls ${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}
+              ${{ secrets.DOMAIN_NAME && 'tls ' }}${{ secrets.DOMAIN_NAME && (secrets.ADMIN_EMAIL || 'admin@flowdose.xyz') }}
           }
           EOF
       
@@ -463,10 +463,10 @@ jobs:
               image: flowdose-storefront:latest
               environment:
                 NODE_ENV: ${{ env.DEPLOY_ENV }}
-                NEXT_PUBLIC_MEDUSA_BACKEND_URL: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}
+                NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${{ secrets.DOMAIN_NAME && format('https://admin.{0}', secrets.DOMAIN_NAME) || format('http://{0}:9000', needs.prepare_deployment.outputs.backend_ip) }}
                 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
                 PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
-                NEXT_PUBLIC_BASE_URL: https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                NEXT_PUBLIC_BASE_URL: ${{ secrets.DOMAIN_NAME && format('https://store.{0}', secrets.DOMAIN_NAME) || format('http://{0}:3000', needs.prepare_deployment.outputs.storefront_ip) }}
                 PORT: 3000
               restart: always
               networks:

@@ -212,8 +212,8 @@ jobs:
           
           echo "Checking Terraform state..."
           # Try to get the output values from Terraform state directly without lock checking
-          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "")
-          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "")
+          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
+          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
           
           # Check if both IPs exist
           if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then

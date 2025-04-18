@@ -198,8 +198,8 @@ jobs:
           if terraform output -json &> /dev/null; then
             # Outputs exist, extract the IPs
             echo "Extracting IPs from Terraform output..."
-            BACKEND_IP=$(terraform output -json 2>/dev/null | jq -r '.backend_ip.value // empty' 2>/dev/null || echo "")
-            STOREFRONT_IP=$(terraform output -json 2>/dev/null | jq -r '.storefront_ip.value // empty' 2>/dev/null || echo "")
+            BACKEND_IP=$(terraform output -json 2>/dev/null | jq -r '.backend_ip.value // empty' 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
+            STOREFRONT_IP=$(terraform output -json 2>/dev/null | jq -r '.storefront_ip.value // empty' 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
             
             echo "Extracted Backend IP: $BACKEND_IP"
             echo "Extracted Storefront IP: $STOREFRONT_IP"

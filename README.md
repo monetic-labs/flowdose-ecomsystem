@@ -133,50 +133,79 @@ When committing changes to trigger Railway builds:
 
 Railway is configured to detect which service to build based on the changes in each commit.
 
-# Flowdose Ecosystem
+# Flowdose E-Commerce System
 
-## Infrastructure and Deployment
+A complete e-commerce solution built with Medusa.js backend and Next.js storefront.
 
-### Terraform Infrastructure
+## Overview
 
-This project uses Terraform to manage infrastructure on DigitalOcean. All infrastructure configuration is in the `/terraform` directory.
+Flowdose E-Commerce System is a comprehensive solution for running an online store. It consists of:
 
-#### Setting up for Deployment
+- **Backend**: A Medusa.js e-commerce backend providing REST API endpoints for all commerce functionality
+- **Storefront**: A Next.js frontend application that serves as the customer-facing store
+- **Admin Panel**: Medusa Admin for managing products, orders, customers, and more
 
-1. **Bootstrap** (one-time setup):
-   - Run the GitHub Actions workflow `terraform-bootstrap.yml` to create the state storage bucket
-   - Create access keys for the Spaces bucket in DigitalOcean console
+## Quick Start
 
-2. **Required Secrets**
-   Add these secrets to your GitHub repository:
-   - `DO_API_TOKEN`: DigitalOcean API token
-   - `DO_SPACES_ACCESS_KEY`: Spaces access key for state storage
-   - `DO_SPACES_SECRET_KEY`: Spaces secret key for state storage
-   - `DO_SSH_PUBLIC_KEY`: SSH public key for droplet provisioning
-   - `DO_SSH_PRIVATE_KEY`: SSH private key for deployment
-   - `DATABASE_URL`: PostgreSQL connection URL
-   - `REDIS_URL`: Redis connection URL
-   - `POSTGRES_HOST`: PostgreSQL host
-   - `REDIS_HOST`: Redis host
-   - `JWT_SECRET`: Secret for JWT tokens
-   - `COOKIE_SECRET`: Secret for cookies
-   - `ADMIN_PASSWORD`: Password for Medusa admin
-   - `PUBLISHABLE_KEY`: Medusa publishable key
-   - `DOMAIN_NAME`: Domain name (optional)
-   - `ADMIN_EMAIL`: Email for Let's Encrypt certificates (optional)
+To set up the project for local development:
 
-### Deployment Architecture
+```bash
+# Clone the repository
+git clone [repository-url]
+cd flowdose-ecomsystem
 
-The deployment is split into two main components:
+# Start the local development environment
+./scripts/local-dev/start-flowdose.sh local
+```
 
-1. **Infrastructure (Terraform)**
-   - Manages DigitalOcean resources (droplets, volumes, domains)
-   - Sets up basic server environment (Docker, directories, network)
-   - Changes to files in `/terraform` directory trigger infrastructure updates
+Once started, you can access:
+- Storefront: http://localhost:3002
+- Admin Panel: http://localhost:9000/app
 
-2. **Application Deployment (GitHub Actions)**
-   - Manages deployment of backend and storefront applications
-   - Uses Docker Compose configurations in `/deploy` directory
-   - Changes to files in `/backend` or `/storefront` directories trigger application updates
+## Documentation
 
-This separation ensures that infrastructure and application deployments don't conflict with each other.
+Comprehensive documentation is available in the `docs` directory:
+
+- [Local Development Setup](docs/setup/local-development.md)
+- [Deployment Guide](docs/deployment/deployment-guide.md)
+- [Project Structure](docs/architecture/project-structure.md)
+
+## Environment Configuration
+
+The application uses environment variables for configuration:
+
+- `.env.local`: Local development environment
+- `.env.staging`: Staging environment
+- `.env.production`: Production environment
+
+Environment-specific variables are loaded automatically by the startup scripts.
+
+## Project Structure
+
+The project is organized as a monorepo:
+
+```
+flowdose-ecomsystem/
+├── backend/             # Medusa backend application
+├── storefront/          # Next.js frontend application
+├── docker/              # Docker-related configuration
+├── scripts/             # Utility scripts
+├── docs/                # Documentation
+├── terraform/           # Infrastructure as Code
+└── deploy/              # Deployment configurations
+```
+
+For more details on the project structure, see [Project Structure](docs/architecture/project-structure.md).
+
+## Development Workflow
+
+1. Make changes to the codebase
+2. Test locally using the development environment
+3. Create a pull request
+4. After review and tests pass, merge to main
+5. Deploy to staging for verification
+6. Deploy to production
+
+## License
+
+[License Information]

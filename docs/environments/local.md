@@ -1,5 +1,8 @@
 # Local Development Environment
 
+> **DEPRECATED**: This documentation has been moved to [Local Development Setup Guide](../setup/local-development.md).
+> Please refer to the new guide for the most up-to-date instructions.
+
 This guide explains how to set up and use the local development environment for the Flowdose Ecomsystem.
 
 ## Prerequisites

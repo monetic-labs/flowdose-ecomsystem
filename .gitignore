@@ -13,6 +13,7 @@ node_modules
 dist
 build
 .next
+*/**/.next
 
 # OS files
 .DS_Store
@@ -45,6 +46,17 @@ infra/.terraform/
 .terraform/
 .terraform.lock.hcl
 infra/.terraform.lock.hcl
+
+# Symlinks in root directory
+/build.sh
+/deploy.sh
+/local-dev.sh
+/start-flowdose.sh
+/LOCAL-SETUP.md
+
+# Local configuration and utility scripts
+storefront/launcher-override.js
+scripts/utils/create-publishable-key.js
 
 # Deployment scripts with secrets
 infra/deploy.sh

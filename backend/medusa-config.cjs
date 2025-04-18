@@ -36,6 +36,14 @@ const medusaConfig = {
   },
   modules: [
     {
+      key: Modules.STOCK_LOCATION,
+      resolve: '@medusajs/stock-location',
+    },
+    {
+      key: Modules.INVENTORY,
+      resolve: '@medusajs/inventory',
+    },
+    {
       key: Modules.FILE,
       resolve: '@medusajs/file',
       options: {

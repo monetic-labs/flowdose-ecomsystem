@@ -16,8 +16,11 @@ COPY package.json .npmrc ./
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile
 
-# Copy the rest of the application
-COPY . .
+# Copy the application code, excluding node_modules
+COPY .eslintrc.js .prettierrc .env* next.config.js next-env.d.ts next-sitemap.js package.json postcss.config.js tailwind.config.js tsconfig.json check-env-variables.js ./
+COPY public ./public
+COPY src ./src
+COPY e2e ./e2e
 
 # Set environment variables specifically for the build step
 ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=$NEXT_PUBLIC_MEDUSA_BACKEND_URL

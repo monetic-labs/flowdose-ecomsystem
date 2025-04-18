@@ -29,16 +29,28 @@ async function getRegionMap() {
       },
     }).then((res) => res.json())
 
+    // Handle the case when no regions are found
     if (!regions?.length) {
-      notFound()
-    }
-
-    // Create a map of country codes to regions.
-    regions.forEach((region: HttpTypes.StoreRegion) => {
-      region.countries?.forEach((c) => {
-        regionMapCache.regionMap.set(c.iso_2 ?? "", region)
+      // Instead of notFound(), use a default region
+      console.warn("No regions found, using default fallback");
+      
+      // Create a dummy region entry for development purposes
+      const dummyRegion = {
+        id: "dummy-region",
+        name: "Default Region",
+        countries: [{ iso_2: DEFAULT_REGION }],
+        currency_code: "usd"
+      };
+      
+      regionMapCache.regionMap.set(DEFAULT_REGION, dummyRegion as any);
+    } else {
+      // Create a map of country codes to regions.
+      regions.forEach((region: HttpTypes.StoreRegion) => {
+        region.countries?.forEach((c) => {
+          regionMapCache.regionMap.set(c.iso_2 ?? "", region)
+        })
       })
-    })
+    }
 
     regionMapCache.regionMapUpdated = Date.now()
   }

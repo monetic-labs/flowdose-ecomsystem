@@ -1,30 +1,72 @@
-# Flowdose Ecomsystem Documentation
+# Flowdose Documentation
 
-This documentation provides comprehensive information about the architecture, deployment process, and environment management for the Flowdose Ecomsystem project.
+This directory contains comprehensive documentation for the Flowdose e-commerce system. This README serves as a guide to navigate the documentation structure.
 
-## Table of Contents
+## Documentation Structure
 
-- [Architecture](./architecture/README.md)
-- [Deployment](./deployment/README.md)
-  - [DigitalOcean Deployment](./deployment/digitalocean.md)
-  - [Docker Setup](./deployment/docker.md)
-- [Environments](./environments/README.md)
-  - [Local Development](./environments/local.md)
-  - [Staging](./environments/staging.md)
-  - [Production](./environments/production.md)
-- [Environment Switching](./environments/switching.md)
+The documentation is organized into the following main sections:
 
-## Project Overview
+### [Setup](./setup/)
 
-Flowdose Ecomsystem is a monorepo containing multiple services:
+Documentation for setting up the project in different environments:
 
-- **Backend**: Medusa.js-based e-commerce backend
-- **Storefront**: Next.js-based frontend for the e-commerce system
+- [Local Development](./setup/local-development.md) - **Primary guide** for setting up the local development environment
 
-The project uses Bun as the package manager and runtime for both services.
+### [Deployment](./deployment/)
 
-## Quick Start
+Documentation for deploying the application to different environments:
 
-See the [Local Development](./environments/local.md) guide to get started with local development.
+- [Deployment Guide](./deployment/deployment-guide.md) - Overview of the deployment process
+- [Docker Deployment](./deployment/docker.md) - Docker-specific deployment information
+- [DigitalOcean Deployment](./deployment/digitalocean.md) - DigitalOcean-specific deployment information
+- [GitHub Secrets](./deployment/github-secrets.md) - Setting up GitHub secrets for CI/CD
 
-For deployment instructions, see the [Deployment](./deployment/README.md) section. 
+### [Architecture](./architecture/)
+
+Documentation describing the system architecture:
+
+- [Project Structure](./architecture/project-structure.md) - Overview of the codebase organization
+
+### [Environments](./environments/)
+
+Documentation for environment-specific configurations:
+
+- [Environment Switching](./environments/switching.md) - How to switch between environments
+- [Local Environment](./environments/local.md) - **(Deprecated, see Setup/Local Development)**
+
+## Documentation Standards
+
+To maintain consistency across our documentation:
+
+1. **Path References**:
+   - Script paths should be referenced as `./scripts/local-dev/` or `./scripts/deployment/`
+   - Docker Compose files should be referenced as `./docker/compose/`
+
+2. **Port References**:
+   - Storefront: http://localhost:3002
+   - Backend API: http://localhost:9000
+   - Admin Dashboard: http://localhost:9000/app
+   - MeiliSearch: http://localhost:7701
+   - MinIO: http://localhost:9000 (API) and http://localhost:9003 (Console)
+
+3. **Environment Files**:
+   - Backend: `.env.local`, `.env.staging`, `.env.production`
+   - Storefront: `.env.local`, `.env.staging`, `.env.production`
+
+## Contributing to Documentation
+
+When updating documentation:
+
+1. Ensure all path references are consistent with the current project structure
+2. Update any outdated information about ports, URLs, or file paths
+3. Maintain the separation between setup, deployment, and architecture docs
+4. Keep the documentation style consistent
+
+## Future Documentation
+
+As the project evolves, we plan to add:
+
+- API documentation
+- Component library documentation
+- Testing strategies
+- Performance optimization guides 

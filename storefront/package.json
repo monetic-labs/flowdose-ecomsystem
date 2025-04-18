@@ -10,9 +10,9 @@
   "scripts": {
     "wait": "await-backend",
     "launcher": "launch-storefront",
-    "dev": "pnpm run wait && pnpm run launcher dev",
+    "dev": "PORT=3002 pnpm run wait && PORT=3002 pnpm run launcher dev",
     "build": "pnpm run wait && pnpm run launcher build",
-    "start": "pnpm run launcher start",
+    "start": "PORT=3002 pnpm run launcher start",
     "build:next": "next build",
     "lint": "next lint",
     "analyze": "ANALYZE=true next build",

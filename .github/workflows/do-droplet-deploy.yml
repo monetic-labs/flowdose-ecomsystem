@@ -473,271 +473,135 @@ jobs:
           scp -o StrictHostKeyChecking=no -r deploy/storefront-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
           scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/Caddyfile_storefront
           
-          # Create fix script for storefront
-          cat > deploy_files/fix_storefront.sh << 'ENDSCRIPT'
-          #!/bin/bash
-          set -e
-
-          echo "=== Starting Storefront Deployment Repair ==="
-          cd /opt/flowdose
+          # Create local files to transfer
+          mkdir -p deploy_files
           
-          echo "1. Fixing directory structure..."
-          mkdir -p data/caddy_data data/caddy_config
+          # Create docker-compose file
+          echo 'version: '"'"'3.8'"'"'' > deploy_files/docker-compose.yml
+          echo 'services:' >> deploy_files/docker-compose.yml
+          echo '  storefront:' >> deploy_files/docker-compose.yml
+          echo '    build:' >> deploy_files/docker-compose.yml
+          echo '      context: ./storefront' >> deploy_files/docker-compose.yml
+          echo '      dockerfile: Dockerfile' >> deploy_files/docker-compose.yml
+          echo '      args:' >> deploy_files/docker-compose.yml
+          echo '        PUBLISHABLE_KEY: ${PUBLISHABLE_KEY}' >> deploy_files/docker-compose.yml
+          echo '    environment:' >> deploy_files/docker-compose.yml
+          echo '      - NODE_ENV=${ENVIRONMENT}' >> deploy_files/docker-compose.yml
+          echo '      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> deploy_files/docker-compose.yml
+          echo '      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/docker-compose.yml
+          echo '      - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> deploy_files/docker-compose.yml
+          echo '      - PORT=3000' >> deploy_files/docker-compose.yml
+          echo '    restart: always' >> deploy_files/docker-compose.yml
+          echo '    networks:' >> deploy_files/docker-compose.yml
+          echo '      - flowdose-network' >> deploy_files/docker-compose.yml
+          echo '' >> deploy_files/docker-compose.yml
+          echo '  caddy:' >> deploy_files/docker-compose.yml
+          echo '    image: caddy:2-alpine' >> deploy_files/docker-compose.yml
+          echo '    restart: unless-stopped' >> deploy_files/docker-compose.yml
+          echo '    ports:' >> deploy_files/docker-compose.yml
+          echo '      - "80:80"' >> deploy_files/docker-compose.yml
+          echo '      - "443:443"' >> deploy_files/docker-compose.yml
+          echo '    volumes:' >> deploy_files/docker-compose.yml
+          echo '      - ./Caddyfile_storefront:/etc/caddy/Caddyfile' >> deploy_files/docker-compose.yml
+          echo '      - ./data/caddy_data:/data' >> deploy_files/docker-compose.yml
+          echo '      - ./data/caddy_config:/config' >> deploy_files/docker-compose.yml
+          echo '    depends_on:' >> deploy_files/docker-compose.yml
+          echo '      - storefront' >> deploy_files/docker-compose.yml
+          echo '    networks:' >> deploy_files/docker-compose.yml
+          echo '      - flowdose-network' >> deploy_files/docker-compose.yml
+          echo '' >> deploy_files/docker-compose.yml
+          echo 'networks:' >> deploy_files/docker-compose.yml
+          echo '  flowdose-network:' >> deploy_files/docker-compose.yml
+          echo '    external: true' >> deploy_files/docker-compose.yml
           
-          echo "2. Creating fresh storefront directory..."
-          rm -rf /opt/flowdose/storefront.bak
-          if [ -d "/opt/flowdose/storefront" ]; then
-            mv /opt/flowdose/storefront /opt/flowdose/storefront.bak
-          fi
-          mkdir -p /opt/flowdose/storefront
+          # Create Dockerfile
+          mkdir -p deploy_files/storefront
           
-          echo "3. Cloning repository to temp location..."
-          rm -rf /tmp/repo-clone
-          mkdir -p /tmp/repo-clone
-          cd /tmp/repo-clone
-          git clone https://${GH_TOKEN}@github.com/${REPO}.git .
+          echo 'FROM node:18-alpine' > deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo 'WORKDIR /app' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Install pnpm' >> deploy_files/storefront/Dockerfile
+          echo 'RUN npm install -g pnpm' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Define build-time arguments' >> deploy_files/storefront/Dockerfile
+          echo 'ARG PUBLISHABLE_KEY' >> deploy_files/storefront/Dockerfile
+          echo 'ENV PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Copy package configuration files first' >> deploy_files/storefront/Dockerfile
+          echo 'COPY package*.json ./' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Install dependencies' >> deploy_files/storefront/Dockerfile
+          echo 'RUN pnpm install --no-frozen-lockfile' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Copy the rest of the application' >> deploy_files/storefront/Dockerfile
+          echo 'COPY . .' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Create .env.local file for Next.js' >> deploy_files/storefront/Dockerfile
+          echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local \\' >> deploy_files/storefront/Dockerfile
+          echo '    && echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}" >> .env.local \\' >> deploy_files/storefront/Dockerfile
+          echo '    && echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local \\' >> deploy_files/storefront/Dockerfile
+          echo '    && echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Set environment variables for build' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Build with error handling - skip static page data fetching' >> deploy_files/storefront/Dockerfile
+          echo 'RUN echo "Building with publishable key: ${PUBLISHABLE_KEY}"' >> deploy_files/storefront/Dockerfile
+          echo 'RUN NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || echo "Build completed with warnings"' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Switch to production for runtime' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NODE_ENV=production' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Expose port' >> deploy_files/storefront/Dockerfile
+          echo 'EXPOSE 3000' >> deploy_files/storefront/Dockerfile
+          echo '' >> deploy_files/storefront/Dockerfile
+          echo '# Start the server' >> deploy_files/storefront/Dockerfile
+          echo 'CMD ["pnpm", "start"]' >> deploy_files/storefront/Dockerfile
           
-          echo "4. Copying storefront files with correct ownership..."
-          cp -R storefront/* /opt/flowdose/storefront/
-          chown -R root:root /opt/flowdose/storefront
+          # Simple deployment script
+          echo '#!/bin/bash' > deploy_files/deploy.sh
+          echo 'set -e' >> deploy_files/deploy.sh
+          echo 'mkdir -p /opt/flowdose/storefront' >> deploy_files/deploy.sh
+          echo 'mkdir -p /opt/flowdose/data/caddy_data /opt/flowdose/data/caddy_config' >> deploy_files/deploy.sh
+          echo 'if [ -d "/opt/flowdose/storefront" ] && [ ! -d "/opt/flowdose/storefront.bak" ]; then' >> deploy_files/deploy.sh
+          echo '  mv /opt/flowdose/storefront /opt/flowdose/storefront.bak' >> deploy_files/deploy.sh
+          echo '  mkdir -p /opt/flowdose/storefront' >> deploy_files/deploy.sh
+          echo 'fi' >> deploy_files/deploy.sh
+          echo 'cd /tmp' >> deploy_files/deploy.sh
+          echo 'rm -rf repo-clone' >> deploy_files/deploy.sh
+          echo 'mkdir -p repo-clone' >> deploy_files/deploy.sh
+          echo 'cd repo-clone' >> deploy_files/deploy.sh
+          echo 'git clone https://${GH_TOKEN}@github.com/${REPO}.git .' >> deploy_files/deploy.sh
+          echo 'cp -R storefront/* /opt/flowdose/storefront/' >> deploy_files/deploy.sh
+          echo 'chown -R root:root /opt/flowdose/storefront' >> deploy_files/deploy.sh
+          echo 'cd /opt/flowdose' >> deploy_files/deploy.sh
+          echo 'cat > /opt/flowdose/storefront/.env.local << EOF' >> deploy_files/deploy.sh
+          echo 'NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> deploy_files/deploy.sh
+          echo 'NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/deploy.sh
+          echo 'NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> deploy_files/deploy.sh
+          echo 'REVALIDATE_SECRET=some-secret-key' >> deploy_files/deploy.sh
+          echo 'EOF' >> deploy_files/deploy.sh
+          echo 'docker compose down || true' >> deploy_files/deploy.sh
+          echo 'docker compose build --no-cache' >> deploy_files/deploy.sh
+          echo 'docker compose up -d' >> deploy_files/deploy.sh
           
-          echo "5. Setting up environment variables for build..."
-          cd /opt/flowdose/storefront
-          
-          # Create .env file with required values for build
-          cat > .env.local << EOL
-          NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
-          NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
-          NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
-          REVALIDATE_SECRET=some-secret-key
-          EOL
-          
-          echo "6. Fixing Dockerfile for missing files and build issues..."
-          cd /opt/flowdose/storefront
-          if [ -f "Dockerfile" ]; then
-            # Create .npmrc if it doesn't exist (referenced in original Dockerfile)
-            touch .npmrc
-            
-            # Modify Dockerfile to handle missing files
-            sed -i 's/COPY package.json .npmrc/COPY package*.json/g' Dockerfile
-            
-            # Ensure environment variables are available during build
-            # Add ARG/ENV statements after the FROM line
-            sed -i '/^FROM/ a ARG PUBLISHABLE_KEY\nENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=\${PUBLISHABLE_KEY}\nENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com\nENV NEXT_PUBLIC_BASE_URL=https://store.example.com' Dockerfile
-            
-            # Update the build command to handle errors
-            sed -i 's/RUN npm run build/RUN npm run build || true/g' Dockerfile
-            sed -i 's/RUN pnpm run build/RUN pnpm run build || true/g' Dockerfile
-            
-            echo "Modified Dockerfile:"
-            cat Dockerfile
-          else
-            # Create a properly formatted docker-compose.yml using individual echo commands
-            echo 'version: '"'"'3.8'"'"'' > docker-compose.yml
-            echo 'services:' >> docker-compose.yml
-            echo '  storefront:' >> docker-compose.yml
-            echo '    build:' >> docker-compose.yml
-            echo '      context: ./storefront' >> docker-compose.yml
-            echo '      dockerfile: Dockerfile' >> docker-compose.yml
-            echo '      args:' >> docker-compose.yml
-            echo '        PUBLISHABLE_KEY: ${PUBLISHABLE_KEY}' >> docker-compose.yml
-            echo '    environment:' >> docker-compose.yml
-            echo '      - NODE_ENV=${ENVIRONMENT}' >> docker-compose.yml
-            echo '      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> docker-compose.yml
-            echo '      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> docker-compose.yml
-            echo '      - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> docker-compose.yml
-            echo '      - PORT=3000' >> docker-compose.yml
-            echo '    restart: always' >> docker-compose.yml
-            echo '    networks:' >> docker-compose.yml
-            echo '      - flowdose-network' >> docker-compose.yml
-            echo '' >> docker-compose.yml
-            echo '  caddy:' >> docker-compose.yml
-            echo '    image: caddy:2-alpine' >> docker-compose.yml
-            echo '    restart: unless-stopped' >> docker-compose.yml
-            echo '    ports:' >> docker-compose.yml
-            echo '      - "80:80"' >> docker-compose.yml
-            echo '      - "443:443"' >> docker-compose.yml
-            echo '    volumes:' >> docker-compose.yml
-            echo '      - ./Caddyfile_storefront:/etc/caddy/Caddyfile' >> docker-compose.yml
-            echo '      - ./data/caddy_data:/data' >> docker-compose.yml
-            echo '      - ./data/caddy_config:/config' >> docker-compose.yml
-            echo '    depends_on:' >> docker-compose.yml
-            echo '      - storefront' >> docker-compose.yml
-            echo '    networks:' >> docker-compose.yml
-            echo '      - flowdose-network' >> docker-compose.yml
-            echo '' >> docker-compose.yml
-            echo 'networks:' >> docker-compose.yml
-            echo '  flowdose-network:' >> docker-compose.yml
-            echo '    external: true' >> docker-compose.yml
-
-            # Create a proper Dockerfile that can handle the publishable key
-            mkdir -p storefront
-            
-            echo 'FROM node:18-alpine' > storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo 'WORKDIR /app' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Install pnpm' >> storefront/Dockerfile
-            echo 'RUN npm install -g pnpm' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Define build-time arguments' >> storefront/Dockerfile
-            echo 'ARG PUBLISHABLE_KEY' >> storefront/Dockerfile
-            echo 'ENV PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Copy package configuration files first' >> storefront/Dockerfile
-            echo 'COPY package*.json ./' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Install dependencies' >> storefront/Dockerfile
-            echo 'RUN pnpm install --no-frozen-lockfile' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Copy the rest of the application' >> storefront/Dockerfile
-            echo 'COPY . .' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Create .env.local file for Next.js' >> storefront/Dockerfile
-            echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local \\' >> storefront/Dockerfile
-            echo '    && echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}" >> .env.local \\' >> storefront/Dockerfile
-            echo '    && echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local \\' >> storefront/Dockerfile
-            echo '    && echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Set environment variables for build' >> storefront/Dockerfile
-            echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> storefront/Dockerfile
-            echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> storefront/Dockerfile
-            echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Build with error handling - skip static page data fetching' >> storefront/Dockerfile
-            echo 'RUN echo "Building with publishable key: ${PUBLISHABLE_KEY}"' >> storefront/Dockerfile
-            echo 'RUN NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || echo "Build completed with warnings"' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Switch to production for runtime' >> storefront/Dockerfile
-            echo 'ENV NODE_ENV=production' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Expose port' >> storefront/Dockerfile
-            echo 'EXPOSE 3000' >> storefront/Dockerfile
-            echo '' >> storefront/Dockerfile
-            echo '# Start the server' >> storefront/Dockerfile
-            echo 'CMD ["pnpm", "start"]' >> storefront/Dockerfile
-
-            echo "Files created successfully. Displaying Dockerfile:"
-            cat storefront/Dockerfile
-
-            echo "=== Deployment repair complete ==="
-            ENDSCRIPT
-
-          echo "7. Ensuring docker-compose.yml is properly configured..."
-          cd /opt/flowdose
-          
-          # Create a properly formatted docker-compose.yml using individual echo commands
-          echo 'version: '"'"'3.8'"'"'' > docker-compose.yml
-          echo 'services:' >> docker-compose.yml
-          echo '  storefront:' >> docker-compose.yml
-          echo '    build:' >> docker-compose.yml
-          echo '      context: ./storefront' >> docker-compose.yml
-          echo '      dockerfile: Dockerfile' >> docker-compose.yml
-          echo '      args:' >> docker-compose.yml
-          echo '        PUBLISHABLE_KEY: ${PUBLISHABLE_KEY}' >> docker-compose.yml
-          echo '    environment:' >> docker-compose.yml
-          echo '      - NODE_ENV=${ENVIRONMENT}' >> docker-compose.yml
-          echo '      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> docker-compose.yml
-          echo '      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> docker-compose.yml
-          echo '      - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> docker-compose.yml
-          echo '      - PORT=3000' >> docker-compose.yml
-          echo '    restart: always' >> docker-compose.yml
-          echo '    networks:' >> docker-compose.yml
-          echo '      - flowdose-network' >> docker-compose.yml
-          echo '' >> docker-compose.yml
-          echo '  caddy:' >> docker-compose.yml
-          echo '    image: caddy:2-alpine' >> docker-compose.yml
-          echo '    restart: unless-stopped' >> docker-compose.yml
-          echo '    ports:' >> docker-compose.yml
-          echo '      - "80:80"' >> docker-compose.yml
-          echo '      - "443:443"' >> docker-compose.yml
-          echo '    volumes:' >> docker-compose.yml
-          echo '      - ./Caddyfile_storefront:/etc/caddy/Caddyfile' >> docker-compose.yml
-          echo '      - ./data/caddy_data:/data' >> docker-compose.yml
-          echo '      - ./data/caddy_config:/config' >> docker-compose.yml
-          echo '    depends_on:' >> docker-compose.yml
-          echo '      - storefront' >> docker-compose.yml
-          echo '    networks:' >> docker-compose.yml
-          echo '      - flowdose-network' >> docker-compose.yml
-          echo '' >> docker-compose.yml
-          echo 'networks:' >> docker-compose.yml
-          echo '  flowdose-network:' >> docker-compose.yml
-          echo '    external: true' >> docker-compose.yml
-
-          # Create a proper Dockerfile that can handle the publishable key
-          mkdir -p storefront
-          
-          echo 'FROM node:18-alpine' > storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo 'WORKDIR /app' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Install pnpm' >> storefront/Dockerfile
-          echo 'RUN npm install -g pnpm' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Define build-time arguments' >> storefront/Dockerfile
-          echo 'ARG PUBLISHABLE_KEY' >> storefront/Dockerfile
-          echo 'ENV PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Copy package configuration files first' >> storefront/Dockerfile
-          echo 'COPY package*.json ./' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Install dependencies' >> storefront/Dockerfile
-          echo 'RUN pnpm install --no-frozen-lockfile' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Copy the rest of the application' >> storefront/Dockerfile
-          echo 'COPY . .' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Create .env.local file for Next.js' >> storefront/Dockerfile
-          echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local \\' >> storefront/Dockerfile
-          echo '    && echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}" >> .env.local \\' >> storefront/Dockerfile
-          echo '    && echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local \\' >> storefront/Dockerfile
-          echo '    && echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Set environment variables for build' >> storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Build with error handling - skip static page data fetching' >> storefront/Dockerfile
-          echo 'RUN echo "Building with publishable key: ${PUBLISHABLE_KEY}"' >> storefront/Dockerfile
-          echo 'RUN NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || echo "Build completed with warnings"' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Switch to production for runtime' >> storefront/Dockerfile
-          echo 'ENV NODE_ENV=production' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Expose port' >> storefront/Dockerfile
-          echo 'EXPOSE 3000' >> storefront/Dockerfile
-          echo '' >> storefront/Dockerfile
-          echo '# Start the server' >> storefront/Dockerfile
-          echo 'CMD ["pnpm", "start"]' >> storefront/Dockerfile
-
-          echo "Files created successfully. Displaying Dockerfile:"
-          cat storefront/Dockerfile
-
-          echo "=== Deployment repair complete ==="
-          ENDSCRIPT
-          
-          # Make scripts executable
-          chmod +x deploy_files/fix_storefront.sh
+          # Make the script executable
+          chmod +x deploy_files/deploy.sh
           
           # Transfer files to server
-          scp -o StrictHostKeyChecking=no deploy_files/fix_storefront.sh root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/tmp/fix_storefront.sh
+          scp -o StrictHostKeyChecking=no -r deploy_files/docker-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
+          scp -o StrictHostKeyChecking=no -r deploy_files/storefront/Dockerfile root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/storefront/Dockerfile
+          scp -o StrictHostKeyChecking=no deploy_files/deploy.sh root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/tmp/deploy.sh
           
-          # Execute the repair script
+          # Execute the script
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
             export GH_TOKEN='${{ secrets.GH_TOKEN }}'
             export REPO='${{ github.repository }}'
             export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}'
             export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}'
             export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}'
-            bash /tmp/fix_storefront.sh
-            
-            cd /opt/flowdose && 
-            export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
-            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
-            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
-            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
-            docker compose down || true &&
-            docker compose build --no-cache &&
-            docker compose up -d
+            bash /tmp/deploy.sh
           " 

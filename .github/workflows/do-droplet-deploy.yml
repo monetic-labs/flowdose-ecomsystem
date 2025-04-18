@@ -242,7 +242,7 @@ jobs:
           docker save flowdose-backend:latest | gzip > /tmp/docker-images/backend.tar.gz
       
       - name: Upload Backend Image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: backend-image
           path: /tmp/docker-images/backend.tar.gz
@@ -294,7 +294,7 @@ jobs:
           docker save flowdose-storefront:latest | gzip > /tmp/docker-images/storefront.tar.gz
       
       - name: Upload Storefront Image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: storefront-image
           path: /tmp/docker-images/storefront.tar.gz
@@ -317,7 +317,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Download Backend Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: backend-image
           path: /tmp/docker-images
@@ -426,7 +426,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Download Storefront Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: storefront-image
           path: /tmp/docker-images

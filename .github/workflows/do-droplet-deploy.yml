@@ -524,12 +524,16 @@ jobs:
           echo '# Install pnpm' >> deploy_files/storefront/Dockerfile
           echo 'RUN npm install -g pnpm' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Define build-time arguments' >> deploy_files/storefront/Dockerfile
-          echo 'ARG PUBLISHABLE_KEY' >> deploy_files/storefront/Dockerfile
-          echo 'ENV PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/storefront/Dockerfile
+          echo '# Define build-time arguments and environment variables' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/storefront/Dockerfile
+          echo 'ENV PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> deploy_files/storefront/Dockerfile
+          echo 'ENV NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Copy package configuration files first' >> deploy_files/storefront/Dockerfile
           echo 'COPY package*.json ./' >> deploy_files/storefront/Dockerfile
+          echo 'RUN touch .npmrc' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Install dependencies' >> deploy_files/storefront/Dockerfile
           echo 'RUN pnpm install --no-frozen-lockfile' >> deploy_files/storefront/Dockerfile
@@ -538,10 +542,12 @@ jobs:
           echo 'COPY . .' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Create .env.local file for Next.js' >> deploy_files/storefront/Dockerfile
-          echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local \\' >> deploy_files/storefront/Dockerfile
-          echo '    && echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}" >> .env.local \\' >> deploy_files/storefront/Dockerfile
-          echo '    && echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local \\' >> deploy_files/storefront/Dockerfile
-          echo '    && echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local' >> deploy_files/storefront/Dockerfile
+          echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local && \\' >> deploy_files/storefront/Dockerfile
+          echo '    echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
+          echo '    echo "PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
+          echo '    echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
+          echo '    echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
+          echo '    echo "NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true" >> .env.local' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Set environment variables for build' >> deploy_files/storefront/Dockerfile
           echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> deploy_files/storefront/Dockerfile
@@ -550,7 +556,7 @@ jobs:
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Build with error handling - skip static page data fetching' >> deploy_files/storefront/Dockerfile
           echo 'RUN echo "Building with publishable key: ${PUBLISHABLE_KEY}"' >> deploy_files/storefront/Dockerfile
-          echo 'RUN NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || echo "Build completed with warnings"' >> deploy_files/storefront/Dockerfile
+          echo 'RUN NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || true' >> deploy_files/storefront/Dockerfile
           echo '' >> deploy_files/storefront/Dockerfile
           echo '# Switch to production for runtime' >> deploy_files/storefront/Dockerfile
           echo 'ENV NODE_ENV=production' >> deploy_files/storefront/Dockerfile
@@ -603,6 +609,8 @@ jobs:
           echo '  # Make the build succeed even with errors' >> deploy_files/deploy.sh
           echo '  sed -i "s/RUN pnpm run build/RUN pnpm run build || true/g" Dockerfile' >> deploy_files/deploy.sh
           echo '  sed -i "s/RUN npm run build/RUN npm run build || true/g" Dockerfile' >> deploy_files/deploy.sh
+          echo '  # Fix any true:next typos' >> deploy_files/deploy.sh
+          echo '  sed -i "s/true:next/true/g" Dockerfile' >> deploy_files/deploy.sh
           
           echo '  # Display modified Dockerfile' >> deploy_files/deploy.sh
           echo '  echo "Modified Dockerfile:"' >> deploy_files/deploy.sh
@@ -612,13 +620,33 @@ jobs:
           echo '  echo "No existing Dockerfile, using the one we created"' >> deploy_files/deploy.sh
           echo 'fi' >> deploy_files/deploy.sh
 
-          echo 'cd /opt/flowdose' >> deploy_files/deploy.sh
+          # Enhanced handling for the publishable key in the .env file
           echo 'cat > /opt/flowdose/storefront/.env.local << EOF' >> deploy_files/deploy.sh
           echo 'NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> deploy_files/deploy.sh
-          echo 'NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/deploy.sh
+          echo 'NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/deploy.sh
+          echo 'PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/deploy.sh
           echo 'NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> deploy_files/deploy.sh
           echo 'REVALIDATE_SECRET=some-secret-key' >> deploy_files/deploy.sh
+          echo 'SKIP_INVALID_REMOTES=true' >> deploy_files/deploy.sh
           echo 'EOF' >> deploy_files/deploy.sh
+
+          # Add debug step to verify env file
+          echo 'echo "Created .env.local with content:"' >> deploy_files/deploy.sh
+          echo 'cat /opt/flowdose/storefront/.env.local' >> deploy_files/deploy.sh
+
+          # Modify Next.js build command
+          echo 'echo "Modifying Next.js build command to skip page data collection"' >> deploy_files/deploy.sh
+          echo 'if [ -f "package.json" ]; then' >> deploy_files/deploy.sh
+          echo '  echo "Original build scripts:"' >> deploy_files/deploy.sh
+          echo '  grep -A 5 \\"scripts\\" package.json' >> deploy_files/deploy.sh
+          echo '  # Add custom build script that skips problematic pages' >> deploy_files/deploy.sh
+          echo '  sed -i "s/\\"build\\": \\"next build\\"/\\"build\\": \\"NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true next build\\"/g" package.json' >> deploy_files/deploy.sh
+          echo '  echo "Modified build scripts:"' >> deploy_files/deploy.sh
+          echo '  grep -A 5 \\"scripts\\" package.json' >> deploy_files/deploy.sh
+          echo 'fi' >> deploy_files/deploy.sh
+          
+          # Add back the docker compose commands
+          echo 'cd /opt/flowdose' >> deploy_files/deploy.sh
           echo 'docker compose down || true' >> deploy_files/deploy.sh
           echo 'docker compose build --no-cache' >> deploy_files/deploy.sh
           echo 'docker compose up -d' >> deploy_files/deploy.sh

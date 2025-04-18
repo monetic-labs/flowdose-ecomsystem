@@ -22,6 +22,7 @@ on:
 
 jobs:
   prepare_deployment:
+    name: Prepare Deployment
     runs-on: ubuntu-latest
     outputs:
       backend_ip: ${{ steps.get_ips.outputs.backend_ip }}
@@ -29,10 +30,10 @@ jobs:
       can_deploy: ${{ steps.get_ips.outputs.can_deploy }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.0
         
@@ -43,6 +44,9 @@ jobs:
         
       - name: Create Docker Compose Files
         run: |
+          # Ensure deploy directory exists
+          mkdir -p deploy
+          
           # Create backend compose file if it doesn't exist
           if [ ! -f "deploy/backend-compose.yml" ]; then
             cat > deploy/backend-compose.yml << 'EOL'
@@ -103,9 +107,12 @@ jobs:
               build:
                 context: ../storefront
                 dockerfile: Dockerfile
+                args:
+                  - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
+                  - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
+                  - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
               environment:
                 - NODE_ENV=${ENVIRONMENT}
-                # Use HTTPS for backend URL
                 - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}
                 - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}
                 - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}
@@ -166,64 +173,22 @@ jobs:
             exit 0
           fi
           
-          echo "Initializing Terraform with backend credentials..."
-          # Check if backend_override.tf already exists and remove it
-          if [ -f "backend_override.tf" ]; then
-            echo "Removing existing backend_override.tf file..."
-            rm backend_override.tf
-          fi
+          # Initialize Terraform with backend credentials
+          terraform init -backend-config="access_key=$DO_SPACES_ACCESS_KEY" \
+                         -backend-config="secret_key=$DO_SPACES_SECRET_KEY" \
+                         -reconfigure
           
-          # Create backend override file
-          cat > backend_override.tf << EOL
-          terraform {
-            backend "s3" {
-              endpoint                    = "https://sfo3.digitaloceanspaces.com"
-              bucket                      = "flowdose-state-storage"
-              key                         = "flowdose/terraform.tfstate"
-              region                      = "us-east-1"
-              skip_credentials_validation = true
-              skip_metadata_api_check     = true
-              skip_region_validation      = true
-              force_path_style            = false
-              access_key                  = "$DO_SPACES_ACCESS_KEY"
-              secret_key                  = "$DO_SPACES_SECRET_KEY"
-            }
-          }
-          EOL
-          
-          # Initialize Terraform with explicit backend config
-          if ! terraform init -reconfigure 2>&1 | tee terraform_init.log; then
-            
-            # Check if the error is about the bucket not existing (bootstrap not done)
-            if grep -q "bucket does not exist" terraform_init.log; then
-              echo "WARNING: Terraform state bucket does not exist. Bootstrap process not completed."
-              echo "Please run the terraform-bootstrap.yml workflow first, or set up fallback IPs."
-            fi
-            
-            echo "WARNING: Failed to initialize Terraform backend. Using fallback IPs."
-            echo "backend_ip=$FALLBACK_BACKEND_IP" >> $GITHUB_OUTPUT
-            echo "storefront_ip=$FALLBACK_STOREFRONT_IP" >> $GITHUB_OUTPUT
-            echo "can_deploy=true" >> $GITHUB_OUTPUT
-            
-            echo "Using Fallback Backend IP: $FALLBACK_BACKEND_IP"
-            echo "Using Fallback Storefront IP: $FALLBACK_STOREFRONT_IP"
-            exit 0
-          fi
-          
-          echo "Checking Terraform state..."
-          # Try to get the output values from Terraform state directly without lock checking
-          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
-          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null | grep -o '^[0-9\.]*' || echo "")
+          # Get output values from Terraform state
+          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "")
+          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "")
           
           # Check if both IPs exist
           if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
             echo "Infrastructure not fully provisioned yet."
             
-            # Check if we have fallback IPs
+            # Use fallback IPs
             if [ "$FALLBACK_BACKEND_IP" = "127.0.0.1" ] || [ "$FALLBACK_STOREFRONT_IP" = "127.0.0.1" ]; then
               echo "No fallback IPs configured either. Deployment cannot proceed."
-              echo "Please run the terraform-infrastructure.yml workflow first to provision infrastructure"
-              echo "Or manually add BACKEND_IP and STOREFRONT_IP as repository variables."
               echo "can_deploy=false" >> $GITHUB_OUTPUT
               exit 1
             else
@@ -241,430 +206,313 @@ jobs:
           echo "Using Backend IP: $BACKEND_IP"
           echo "Using Storefront IP: $STOREFRONT_IP"
 
-  deploy:
+  build_backend:
+    name: Build Backend
     needs: prepare_deployment
-    runs-on: ubuntu-latest
     if: needs.prepare_deployment.outputs.can_deploy == 'true'
-    env:
-      DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-backend-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-backend-
+      
+      - name: Build Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: flowdose-backend:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+      
+      - name: Save Backend Image
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save flowdose-backend:latest | gzip > /tmp/docker-images/backend.tar.gz
+      
+      - name: Upload Backend Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-image
+          path: /tmp/docker-images/backend.tar.gz
+          retention-days: 1
+      
+      # Prevent cache from growing too large
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  build_storefront:
+    name: Build Storefront
+    needs: prepare_deployment
+    if: needs.prepare_deployment.outputs.can_deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-storefront-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-storefront-
+      
+      - name: Build Storefront Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./storefront
+          push: false
+          load: true
+          tags: flowdose-storefront:latest
+          build-args: |
+            NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}
+            NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${{ secrets.PUBLISHABLE_KEY }}
+            NEXT_PUBLIC_BASE_URL=https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+      
+      - name: Save Storefront Image
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save flowdose-storefront:latest | gzip > /tmp/docker-images/storefront.tar.gz
+      
+      - name: Upload Storefront Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: storefront-image
+          path: /tmp/docker-images/storefront.tar.gz
+          retention-days: 1
+      
+      # Prevent cache from growing too large
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  deploy_backend:
+    name: Deploy Backend
+    needs: [prepare_deployment, build_backend]
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download Backend Image
+        uses: actions/download-artifact@v3
+        with:
+          name: backend-image
+          path: /tmp/docker-images
+      
       - name: Install SSH Key
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
           known_hosts: 'just-a-placeholder'
-          
-      - name: Adding Known Hosts
+      
+      - name: Add Known Hosts
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ needs.prepare_deployment.outputs.backend_ip }} >> ~/.ssh/known_hosts
-          ssh-keyscan -H ${{ needs.prepare_deployment.outputs.storefront_ip }} >> ~/.ssh/known_hosts
       
-      - name: Diagnose Server Environment
+      - name: Create Caddy Config
         run: |
-          echo "===== DIAGNOSING BACKEND SERVER ====="
-          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
-            echo 'Current directory structure:'
-            find /opt/flowdose -type d | sort
-            
-            echo -e '\nDocker status:'
-            docker ps -a
-            
-            echo -e '\nDirectory contents:'
-            ls -la /opt/flowdose/
-            
-            echo -e '\nChecking Dockerfile locations:'
-            find /opt -name Dockerfile
-            
-            echo -e '\nDisplay backend-compose.yml content:'
-            cat /opt/flowdose/docker-compose.yml || echo 'File not found'
-            
-            echo -e '\nChecking if folder is git repo:'
-            cd /opt/flowdose && git status || echo 'Not a git repo'
-          "
-          
-          echo "===== DIAGNOSING STOREFRONT SERVER ====="
-          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
-            echo 'Current directory structure:'
-            find /opt/flowdose -type d | sort
-            
-            echo -e '\nDocker status:'
-            docker ps -a
-            
-            echo -e '\nDirectory contents:'
-            ls -la /opt/flowdose/
-            
-            echo -e '\nChecking Dockerfile locations:'
-            find /opt -name Dockerfile
-            
-            echo -e '\nDisplay storefront-compose.yml content:'
-            cat /opt/flowdose/docker-compose.yml || echo 'File not found'
-            
-            echo -e '\nChecking if folder is git repo:'
-            cd /opt/flowdose && git status || echo 'Not a git repo'
-          "
-      
-      - name: Wait for any infrastructure changes to complete
-        run: sleep 60  # Give Terraform user_data scripts time to complete
-      
-      - name: Create Caddy config files
-        run: |
-          # Ensure deploy directory exists
           mkdir -p deploy
           
-          # Create template files if they don't exist
-          if [ ! -f "deploy/Caddyfile_backend.template" ]; then
-            echo '${ADMIN_DOMAIN} {
-                reverse_proxy backend:9000
-                tls ${ADMIN_EMAIL_FOR_CERTS}
-            }' > deploy/Caddyfile_backend.template
-          fi
-          
-          if [ ! -f "deploy/Caddyfile_storefront.template" ]; then
-            echo '${STORE_DOMAIN} {
-                reverse_proxy storefront:3000
-                tls ${ADMIN_EMAIL_FOR_CERTS}
-            }' > deploy/Caddyfile_storefront.template
-          fi
-          
-          # Create Caddyfile for backend from template
-          cat deploy/Caddyfile_backend.template | \
-            sed "s|\${ADMIN_DOMAIN}|admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}|g" | \
-            sed "s|\${ADMIN_EMAIL_FOR_CERTS}|${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}|g" \
-            > deploy/Caddyfile_backend
-          
-          # Create Caddyfile for storefront from template
-          cat deploy/Caddyfile_storefront.template | \
-            sed "s|\${STORE_DOMAIN}|store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}|g" | \
-            sed "s|\${ADMIN_EMAIL_FOR_CERTS}|${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}|g" \
-            > deploy/Caddyfile_storefront
+          # Create Caddyfile for backend
+          cat > deploy/Caddyfile_backend << EOF
+          admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }} {
+              reverse_proxy backend:9000
+              tls ${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}
+          }
+          EOF
       
-      - name: Deploy Backend
+      - name: Create Docker Compose
         run: |
-          # First copy deployment files
-          scp -o StrictHostKeyChecking=no -r deploy/backend-compose.yml root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/docker-compose.yml
-          scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_backend root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/Caddyfile_backend
-          
-          # Create local files that will be transferred to server
-          mkdir -p deploy_files
-          
-          # Create vite config file
-          cat > deploy_files/vite.config.js << 'ENDVITE'
-          import { defineConfig } from 'vite';
-          import react from '@vitejs/plugin-react';
+          cat > deploy/docker-compose.yml << EOF
+          version: '3.8'
+          services:
+            backend:
+              image: flowdose-backend:latest
+              environment:
+                NODE_ENV: ${{ env.DEPLOY_ENV }}
+                DATABASE_URL: ${{ secrets.DATABASE_URL }}
+                REDIS_URL: ${{ secrets.REDIS_URL }}
+                PORT: 9000
+                ADMIN_CORS: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }},https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                STORE_CORS: https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                AUTH_CORS: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }},https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                JWT_SECRET: ${{ secrets.JWT_SECRET }}
+                COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
+                MEDUSA_ADMIN_EMAIL: admin@flowdose.xyz
+                MEDUSA_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+                MEDUSA_PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
+                PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
+              restart: always
+              networks:
+                - flowdose-network
 
-          export default defineConfig({
-            plugins: [react()],
-            build: {
-              rollupOptions: {
-                external: ['@medusajs/dashboard']
-              }
-            }
-          });
-          ENDVITE
-          
-          # Create fix script
-          cat > deploy_files/fix_backend.sh << 'ENDSCRIPT'
-          #!/bin/bash
-          set -e
+            caddy:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./Caddyfile_backend:/etc/caddy/Caddyfile
+                - ./data/caddy_data:/data
+                - ./data/caddy_config:/config
+              depends_on:
+                - backend
+              networks:
+                - flowdose-network
 
-          echo "=== Starting Backend Deployment Repair ==="
-          cd /opt/flowdose
-          
-          echo "1. Fixing directory structure..."
-          mkdir -p data/caddy_data data/caddy_config
-          
-          echo "2. Creating fresh backend directory..."
-          rm -rf /opt/flowdose/backend.bak
-          if [ -d "/opt/flowdose/backend" ]; then
-            mv /opt/flowdose/backend /opt/flowdose/backend.bak
-          fi
-          mkdir -p /opt/flowdose/backend
-          
-          echo "3. Cloning repository to temp location..."
-          rm -rf /tmp/repo-clone
-          mkdir -p /tmp/repo-clone
-          cd /tmp/repo-clone
-          git clone https://${GH_TOKEN}@github.com/${REPO}.git .
-          
-          echo "4. Copying backend files with correct ownership..."
-          cp -R backend/* /opt/flowdose/backend/
-          chown -R root:root /opt/flowdose/backend
-          
-          echo "5. Fixing Dockerfile for missing files..."
-          cd /opt/flowdose/backend
-          if [ -f "Dockerfile" ]; then
-            # Create .npmrc if it doesn't exist (referenced in original Dockerfile)
-            touch .npmrc
-            
-            # Modify Dockerfile to handle missing dependencies
-            sed -i 's/COPY package.json .npmrc/COPY package*.json/g' Dockerfile
-            
-            # Add the missing @medusajs/dashboard dependency
-            sed -i '/RUN pnpm install/a RUN pnpm add @medusajs/dashboard' Dockerfile
-            
-            # Update the build command to continue despite errors
-            sed -i 's/RUN pnpm build/RUN pnpm build || true/g' Dockerfile
-            
-            echo "Modified Dockerfile:"
-            cat Dockerfile
-          else
-            # Create an enhanced fallback Dockerfile using individual echo statements
-            echo 'FROM node:18-alpine' > Dockerfile
-            echo 'WORKDIR /app' >> Dockerfile
-            echo 'COPY package*.json ./' >> Dockerfile
-            echo 'RUN npm install -g pnpm' >> Dockerfile
-            echo 'RUN touch .npmrc' >> Dockerfile
-            echo 'RUN pnpm install' >> Dockerfile
-            echo 'RUN pnpm add @medusajs/dashboard' >> Dockerfile
-            echo 'COPY . .' >> Dockerfile
-            echo 'RUN pnpm build || true' >> Dockerfile
-          fi
-          
-          # Create the client directory structure if it doesn't exist
-          mkdir -p .medusa/client
-          
-          # Copy vite config file to correct location
-          cp /tmp/vite.config.js .medusa/client/vite.config.js
-          
-          echo "6. Ensuring docker-compose.yml is properly configured..."
-          cd /opt/flowdose
-          sed -i 's|context: ../backend|context: ./backend|g' docker-compose.yml
-
-          echo "=== Deployment repair complete ==="
-          ENDSCRIPT
-          
-          # Make scripts executable
-          chmod +x deploy_files/fix_backend.sh
-          
-          # Transfer files to server
-          scp -o StrictHostKeyChecking=no deploy_files/vite.config.js root@${{ needs.prepare_deployment.outputs.backend_ip }}:/tmp/vite.config.js
-          scp -o StrictHostKeyChecking=no deploy_files/fix_backend.sh root@${{ needs.prepare_deployment.outputs.backend_ip }}:/tmp/fix_backend.sh
-          
-          # Execute the repair script
+          networks:
+            flowdose-network:
+              name: flowdose-network
+          EOF
+      
+      - name: Deploy to Server
+        run: |
+          # Ensure proper directories exist
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
-            export GH_TOKEN='${{ secrets.GH_TOKEN }}'
-            export REPO='${{ github.repository }}'
-            bash /tmp/fix_backend.sh
-            
+            mkdir -p /opt/flowdose/data/caddy_data /opt/flowdose/data/caddy_config
+          "
+          
+          # Transfer Docker image and configs
+          scp -o StrictHostKeyChecking=no /tmp/docker-images/backend.tar.gz root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/
+          scp -o StrictHostKeyChecking=no deploy/Caddyfile_backend root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/
+          scp -o StrictHostKeyChecking=no deploy/docker-compose.yml root@${{ needs.prepare_deployment.outputs.backend_ip }}:/opt/flowdose/
+          
+          # Load image and start services
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.backend_ip }} "
             cd /opt/flowdose && 
-            export ENVIRONMENT='${{ env.DEPLOY_ENV }}' &&
-            export DATABASE_URL='${{ secrets.DATABASE_URL }}' &&
-            export REDIS_URL='${{ secrets.REDIS_URL }}' &&
-            export JWT_SECRET='${{ secrets.JWT_SECRET }}' &&
-            export COOKIE_SECRET='${{ secrets.COOKIE_SECRET }}' &&
-            export ADMIN_EMAIL='admin@flowdose.xyz' &&
-            export ADMIN_PASSWORD='${{ secrets.ADMIN_PASSWORD }}' &&
-            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}' &&
-            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}' &&
-            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}' &&
+            # Create network if it doesn't exist
+            docker network create flowdose-network || true
+            # Load the Docker image
+            docker load < backend.tar.gz &&
+            # Stop any running containers
             docker compose down || true &&
-            docker compose build --no-cache &&
+            # Start services
             docker compose up -d
           "
-        
-      - name: Deploy Storefront
+
+  deploy_storefront:
+    name: Deploy Storefront
+    needs: [prepare_deployment, build_storefront]
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download Storefront Image
+        uses: actions/download-artifact@v3
+        with:
+          name: storefront-image
+          path: /tmp/docker-images
+      
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          known_hosts: 'just-a-placeholder'
+      
+      - name: Add Known Hosts
         run: |
-          # First copy deployment files
-          scp -o StrictHostKeyChecking=no -r deploy/storefront-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
-          scp -o StrictHostKeyChecking=no -r deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/Caddyfile_storefront
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ needs.prepare_deployment.outputs.storefront_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Create Caddy Config
+        run: |
+          mkdir -p deploy
           
-          # Create local files to transfer
-          mkdir -p deploy_files
-          
-          # Create docker-compose file
-          echo 'version: '"'"'3.8'"'"'' > deploy_files/docker-compose.yml
-          echo 'services:' >> deploy_files/docker-compose.yml
-          echo '  storefront:' >> deploy_files/docker-compose.yml
-          echo '    build:' >> deploy_files/docker-compose.yml
-          echo '      context: ./storefront' >> deploy_files/docker-compose.yml
-          echo '      dockerfile: Dockerfile' >> deploy_files/docker-compose.yml
-          echo '      args:' >> deploy_files/docker-compose.yml
-          echo '        PUBLISHABLE_KEY: ${PUBLISHABLE_KEY}' >> deploy_files/docker-compose.yml
-          echo '    environment:' >> deploy_files/docker-compose.yml
-          echo '      - NODE_ENV=${ENVIRONMENT}' >> deploy_files/docker-compose.yml
-          echo '      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> deploy_files/docker-compose.yml
-          echo '      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/docker-compose.yml
-          echo '      - NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> deploy_files/docker-compose.yml
-          echo '      - PORT=3000' >> deploy_files/docker-compose.yml
-          echo '    restart: always' >> deploy_files/docker-compose.yml
-          echo '    networks:' >> deploy_files/docker-compose.yml
-          echo '      - flowdose-network' >> deploy_files/docker-compose.yml
-          echo '' >> deploy_files/docker-compose.yml
-          echo '  caddy:' >> deploy_files/docker-compose.yml
-          echo '    image: caddy:2-alpine' >> deploy_files/docker-compose.yml
-          echo '    restart: unless-stopped' >> deploy_files/docker-compose.yml
-          echo '    ports:' >> deploy_files/docker-compose.yml
-          echo '      - "80:80"' >> deploy_files/docker-compose.yml
-          echo '      - "443:443"' >> deploy_files/docker-compose.yml
-          echo '    volumes:' >> deploy_files/docker-compose.yml
-          echo '      - ./Caddyfile_storefront:/etc/caddy/Caddyfile' >> deploy_files/docker-compose.yml
-          echo '      - ./data/caddy_data:/data' >> deploy_files/docker-compose.yml
-          echo '      - ./data/caddy_config:/config' >> deploy_files/docker-compose.yml
-          echo '    depends_on:' >> deploy_files/docker-compose.yml
-          echo '      - storefront' >> deploy_files/docker-compose.yml
-          echo '    networks:' >> deploy_files/docker-compose.yml
-          echo '      - flowdose-network' >> deploy_files/docker-compose.yml
-          echo '' >> deploy_files/docker-compose.yml
-          echo 'networks:' >> deploy_files/docker-compose.yml
-          echo '  flowdose-network:' >> deploy_files/docker-compose.yml
-          echo '    external: true' >> deploy_files/docker-compose.yml
-          
-          # Create Dockerfile
-          mkdir -p deploy_files/storefront
-          
-          echo 'FROM node:18-alpine' > deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo 'WORKDIR /app' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Install pnpm' >> deploy_files/storefront/Dockerfile
-          echo 'RUN npm install -g pnpm' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Define build-time arguments and environment variables' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/storefront/Dockerfile
-          echo 'ENV PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Copy package configuration files first' >> deploy_files/storefront/Dockerfile
-          echo 'COPY package*.json ./' >> deploy_files/storefront/Dockerfile
-          echo 'RUN touch .npmrc' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Install dependencies' >> deploy_files/storefront/Dockerfile
-          echo 'RUN pnpm install --no-frozen-lockfile' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Copy the rest of the application' >> deploy_files/storefront/Dockerfile
-          echo 'COPY . .' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Create .env.local file for Next.js' >> deploy_files/storefront/Dockerfile
-          echo 'RUN echo "NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com" > .env.local && \\' >> deploy_files/storefront/Dockerfile
-          echo '    echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
-          echo '    echo "PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
-          echo '    echo "NEXT_PUBLIC_BASE_URL=https://store.example.com" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
-          echo '    echo "REVALIDATE_SECRET=revalidate-secret" >> .env.local && \\' >> deploy_files/storefront/Dockerfile
-          echo '    echo "NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true" >> .env.local' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Set environment variables for build' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.example.com' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${PUBLISHABLE_KEY}' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NEXT_PUBLIC_BASE_URL=https://store.example.com' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Build with error handling - skip static page data fetching' >> deploy_files/storefront/Dockerfile
-          echo 'RUN echo "Building with publishable key: ${PUBLISHABLE_KEY}"' >> deploy_files/storefront/Dockerfile
-          echo 'RUN NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true NODE_OPTIONS="--max_old_space_size=4096" NEXT_TELEMETRY_DISABLED=1 pnpm run build || true' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Switch to production for runtime' >> deploy_files/storefront/Dockerfile
-          echo 'ENV NODE_ENV=production' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Expose port' >> deploy_files/storefront/Dockerfile
-          echo 'EXPOSE 3000' >> deploy_files/storefront/Dockerfile
-          echo '' >> deploy_files/storefront/Dockerfile
-          echo '# Start the server' >> deploy_files/storefront/Dockerfile
-          echo 'CMD ["pnpm", "start"]' >> deploy_files/storefront/Dockerfile
-          
-          # Simple deployment script
-          echo '#!/bin/bash' > deploy_files/deploy.sh
-          echo 'set -e' >> deploy_files/deploy.sh
-          echo 'mkdir -p /opt/flowdose/storefront' >> deploy_files/deploy.sh
-          echo 'mkdir -p /opt/flowdose/data/caddy_data /opt/flowdose/data/caddy_config' >> deploy_files/deploy.sh
-          echo 'if [ -d "/opt/flowdose/storefront" ] && [ ! -d "/opt/flowdose/storefront.bak" ]; then' >> deploy_files/deploy.sh
-          echo '  mv /opt/flowdose/storefront /opt/flowdose/storefront.bak' >> deploy_files/deploy.sh
-          echo '  mkdir -p /opt/flowdose/storefront' >> deploy_files/deploy.sh
-          echo 'fi' >> deploy_files/deploy.sh
-          echo 'cd /tmp' >> deploy_files/deploy.sh
-          echo 'rm -rf repo-clone' >> deploy_files/deploy.sh
-          echo 'mkdir -p repo-clone' >> deploy_files/deploy.sh
-          echo 'cd repo-clone' >> deploy_files/deploy.sh
-          echo 'git clone https://${GH_TOKEN}@github.com/${REPO}.git .' >> deploy_files/deploy.sh
-          echo 'cp -R storefront/* /opt/flowdose/storefront/' >> deploy_files/deploy.sh
-          echo 'chown -R root:root /opt/flowdose/storefront' >> deploy_files/deploy.sh
+          # Create Caddyfile for storefront
+          cat > deploy/Caddyfile_storefront << EOF
+          store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }} {
+              reverse_proxy storefront:3000
+              tls ${{ secrets.ADMIN_EMAIL || 'admin@flowdose.xyz' }}
+          }
+          EOF
+      
+      - name: Create Docker Compose
+        run: |
+          cat > deploy/docker-compose.yml << EOF
+          version: '3.8'
+          services:
+            storefront:
+              image: flowdose-storefront:latest
+              environment:
+                NODE_ENV: ${{ env.DEPLOY_ENV }}
+                NEXT_PUBLIC_MEDUSA_BACKEND_URL: https://admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}
+                NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
+                PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
+                NEXT_PUBLIC_BASE_URL: https://store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}
+                PORT: 3000
+              restart: always
+              networks:
+                - flowdose-network
 
-          # Add step to create empty .npmrc file and modify Dockerfile
-          echo 'cd /opt/flowdose/storefront' >> deploy_files/deploy.sh
-          echo 'touch .npmrc' >> deploy_files/deploy.sh
-          echo 'if [ -f "Dockerfile" ]; then' >> deploy_files/deploy.sh
-          echo '  echo "Existing Dockerfile found, applying fixes..."' >> deploy_files/deploy.sh
-          
-          echo '  # Display current Dockerfile' >> deploy_files/deploy.sh
-          echo '  echo "Original Dockerfile:"' >> deploy_files/deploy.sh
-          echo '  cat Dockerfile' >> deploy_files/deploy.sh
-          
-          echo '  # Fix any COPY commands that try to copy .npmrc' >> deploy_files/deploy.sh
-          echo '  sed -i "s/COPY package.json .npmrc/COPY package*.json/g" Dockerfile' >> deploy_files/deploy.sh
-          
-          echo '  # Also fix other common issues' >> deploy_files/deploy.sh
-          echo '  # Add ARG for publishable key if not present' >> deploy_files/deploy.sh
-          echo '  if ! grep -q "ARG PUBLISHABLE_KEY" Dockerfile; then' >> deploy_files/deploy.sh
-          echo '    sed -i "/^FROM/ a ARG PUBLISHABLE_KEY\\nENV NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=\${PUBLISHABLE_KEY}" Dockerfile' >> deploy_files/deploy.sh
-          echo '  fi' >> deploy_files/deploy.sh
-          
-          echo '  # Update node version if needed' >> deploy_files/deploy.sh
-          echo '  sed -i "s/FROM node:22-alpine/FROM node:18-alpine/g" Dockerfile' >> deploy_files/deploy.sh
-          
-          echo '  # Make the build succeed even with errors' >> deploy_files/deploy.sh
-          echo '  sed -i "s/RUN pnpm run build/RUN pnpm run build || true/g" Dockerfile' >> deploy_files/deploy.sh
-          echo '  sed -i "s/RUN npm run build/RUN npm run build || true/g" Dockerfile' >> deploy_files/deploy.sh
-          echo '  # Fix any true:next typos' >> deploy_files/deploy.sh
-          echo '  sed -i "s/true:next/true/g" Dockerfile' >> deploy_files/deploy.sh
-          
-          echo '  # Display modified Dockerfile' >> deploy_files/deploy.sh
-          echo '  echo "Modified Dockerfile:"' >> deploy_files/deploy.sh
-          echo '  cat Dockerfile' >> deploy_files/deploy.sh
-          
-          echo 'else' >> deploy_files/deploy.sh
-          echo '  echo "No existing Dockerfile, using the one we created"' >> deploy_files/deploy.sh
-          echo 'fi' >> deploy_files/deploy.sh
+            caddy:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./Caddyfile_storefront:/etc/caddy/Caddyfile
+                - ./data/caddy_data:/data
+                - ./data/caddy_config:/config
+              depends_on:
+                - storefront
+              networks:
+                - flowdose-network
 
-          # Enhanced handling for the publishable key in the .env file
-          echo 'cat > /opt/flowdose/storefront/.env.local << EOF' >> deploy_files/deploy.sh
-          echo 'NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://${ADMIN_DOMAIN}' >> deploy_files/deploy.sh
-          echo 'NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/deploy.sh
-          echo 'PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW' >> deploy_files/deploy.sh
-          echo 'NEXT_PUBLIC_BASE_URL=https://${STORE_DOMAIN}' >> deploy_files/deploy.sh
-          echo 'REVALIDATE_SECRET=some-secret-key' >> deploy_files/deploy.sh
-          echo 'SKIP_INVALID_REMOTES=true' >> deploy_files/deploy.sh
-          echo 'EOF' >> deploy_files/deploy.sh
-
-          # Add debug step to verify env file
-          echo 'echo "Created .env.local with content:"' >> deploy_files/deploy.sh
-          echo 'cat /opt/flowdose/storefront/.env.local' >> deploy_files/deploy.sh
-
-          # Modify Next.js build command
-          echo 'echo "Modifying Next.js build command to skip page data collection"' >> deploy_files/deploy.sh
-          echo 'if [ -f "package.json" ]; then' >> deploy_files/deploy.sh
-          echo '  echo "Original build scripts:"' >> deploy_files/deploy.sh
-          echo '  grep -A 5 "scripts" package.json' >> deploy_files/deploy.sh
-          echo '  # Add custom build script that skips problematic pages' >> deploy_files/deploy.sh
-          echo '  sed -i "s/\"build\": \"next build\"/\"build\": \"NEXT_PUBLIC_SKIP_CATEGORY_PAGES=true next build\"/g" package.json' >> deploy_files/deploy.sh
-          echo '  echo "Modified build scripts:"' >> deploy_files/deploy.sh
-          echo '  grep -A 5 "scripts" package.json' >> deploy_files/deploy.sh
-          echo 'fi' >> deploy_files/deploy.sh
-          
-          # Add back the docker compose commands
-          echo 'cd /opt/flowdose' >> deploy_files/deploy.sh
-          echo 'docker compose down || true' >> deploy_files/deploy.sh
-          echo 'docker compose build --no-cache' >> deploy_files/deploy.sh
-          echo 'docker compose up -d' >> deploy_files/deploy.sh
-          
-          # Make the script executable
-          chmod +x deploy_files/deploy.sh
-          
-          # Transfer files to server
-          scp -o StrictHostKeyChecking=no -r deploy_files/docker-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/docker-compose.yml
-          scp -o StrictHostKeyChecking=no -r deploy_files/storefront/Dockerfile root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/storefront/Dockerfile
-          scp -o StrictHostKeyChecking=no deploy_files/deploy.sh root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/tmp/deploy.sh
-          
-          # Execute the script
+          networks:
+            flowdose-network:
+              name: flowdose-network
+          EOF
+      
+      - name: Deploy to Server
+        run: |
+          # Ensure proper directories exist
           ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
-            export GH_TOKEN='${{ secrets.GH_TOKEN }}'
-            export REPO='${{ github.repository }}'
-            export PUBLISHABLE_KEY='${{ secrets.PUBLISHABLE_KEY }}'
-            export ADMIN_DOMAIN='admin.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.backend_ip }}'
-            export STORE_DOMAIN='store.${{ secrets.DOMAIN_NAME || needs.prepare_deployment.outputs.storefront_ip }}'
-            bash /tmp/deploy.sh
+            mkdir -p /opt/flowdose/data/caddy_data /opt/flowdose/data/caddy_config
+          "
+          
+          # Transfer Docker image and configs
+          scp -o StrictHostKeyChecking=no /tmp/docker-images/storefront.tar.gz root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/
+          scp -o StrictHostKeyChecking=no deploy/Caddyfile_storefront root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/
+          scp -o StrictHostKeyChecking=no deploy/docker-compose.yml root@${{ needs.prepare_deployment.outputs.storefront_ip }}:/opt/flowdose/
+          
+          # Load image and start services
+          ssh -o StrictHostKeyChecking=no root@${{ needs.prepare_deployment.outputs.storefront_ip }} "
+            cd /opt/flowdose && 
+            # Create network if it doesn't exist
+            docker network create flowdose-network || true
+            # Load the Docker image
+            docker load < storefront.tar.gz &&
+            # Stop any running containers
+            docker compose down || true &&
+            # Start services
+            docker compose up -d
           " 

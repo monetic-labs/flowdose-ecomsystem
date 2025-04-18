@@ -10,17 +10,16 @@ ARG NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.flowdose.xyz
 ARG NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_01HYQGQBV1GRZ96F1EP4X9Q3TW
 ARG NEXT_PUBLIC_BASE_URL=https://store.flowdose.xyz
 
-# Copy package configuration files first
-COPY package.json .npmrc ./
+# Copy package configuration first for dependency installation
+COPY package.json pnpm-lock.yaml ./
+COPY .npmrc* ./
 
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile
 
-# Copy the application code, excluding node_modules
-COPY .eslintrc.js .prettierrc .env* next.config.js next-env.d.ts next-sitemap.js package.json postcss.config.js tailwind.config.js tsconfig.json check-env-variables.js ./
-COPY public ./public
-COPY src ./src
-COPY e2e ./e2e
+# Now copy the entire app directory except node_modules
+# This avoids issues with individual file paths
+COPY . .
 
 # Set environment variables specifically for the build step
 ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=$NEXT_PUBLIC_MEDUSA_BACKEND_URL

@@ -388,6 +388,7 @@ jobs:
           networks:
             flowdose-network:
               name: flowdose-network
+              external: true
           EOF
       
       - name: Deploy to Server
@@ -490,6 +491,7 @@ jobs:
           networks:
             flowdose-network:
               name: flowdose-network
+              external: true
           EOF
       
       - name: Deploy to Server

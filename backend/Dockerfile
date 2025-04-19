@@ -8,6 +8,9 @@ RUN npm install -g pnpm
 # Copy package configuration files first
 COPY package.json .npmrc ./
 
+# Copy SSL certificates 
+COPY certs/ /app/certs/
+
 # Remove any yarn/bun config to avoid conflicts
 RUN rm -f .yarnrc.yml .yarn* yarn* bun.lockb
 
@@ -28,6 +31,7 @@ RUN cp -f medusa-config.js .medusa/server/ || true
 # Set NODE_PATH to include global modules
 ENV NODE_PATH=/usr/local/lib/node_modules:/app/node_modules
 ENV PATH=$PATH:/app/node_modules/.bin
+ENV PGSSLROOTCERT=/app/certs/do-ca-certificate.crt
 
 # Build the application - will now fail if build fails
 RUN pnpm build

@@ -366,6 +366,8 @@ jobs:
                 MEDUSA_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
                 MEDUSA_PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
                 PUBLISHABLE_KEY: ${{ secrets.PUBLISHABLE_KEY }}
+                PGSSLROOTCERT: /app/certs/do-ca-certificate.crt
+                PGSSLMODE: verify-ca
               restart: always
               networks:
                 - flowdose-network

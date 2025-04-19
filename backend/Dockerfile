@@ -29,9 +29,6 @@ RUN cp -f medusa-config.js .medusa/server/ || true
 ENV NODE_PATH=/usr/local/lib/node_modules:/app/node_modules
 ENV PATH=$PATH:/app/node_modules/.bin
 
-# Make the initialization script executable
-RUN chmod +x /app/src/scripts/init-backend.sh
-
 # Build the application - will now fail if build fails
 RUN pnpm build
 
@@ -46,5 +43,5 @@ ENV NODE_ENV=production
 # Expose port
 EXPOSE 9000
 
-# Start the Medusa server, including proper initialization
-CMD ["sh", "-c", "/app/src/scripts/init-backend.sh && pnpm start"] 
+# Start the Medusa server directly
+CMD ["sh", "-c", "echo 'Starting Medusa backend...' && pnpm start"] 

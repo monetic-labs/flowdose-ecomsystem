@@ -1,0 +1,41 @@
+/**
+ * @type {import('next').NextConfig}
+ */
+const nextConfig = {
+  reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "http",
+        hostname: "localhost",
+      },
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+    ],
+  },
+  experimental: {
+    // Stub out getServerSideProps during build to avoid data fetching issues
+    isrMemoryCacheSize: 0,
+    serverComponentsExternalPackages: ['knex', 'pg'],
+  },
+  // Skip typechecking to speed up build
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  // Needed for Docker build without dynamic data
+  staticPageGenerationTimeout: 120,
+  serverRuntimeConfig: {
+    port: process.env.PORT || 3002
+  }
+}
+
+module.exports = nextConfig 

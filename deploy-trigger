@@ -1,9 +1,9 @@
-DEPLOY_TRIGGER=23
+DEPLOY_TRIGGER=25
 # Change this number and commit to force a deployment without changing any files in backend or storefront
-# Last updated: 2025-04-16
+# Last updated: 2025-04-19
 # This file is used to trigger deployments
 # Update the timestamp below to trigger a deployment
-LAST_DEPLOY=2025-04-16T04:30:00Z
+LAST_DEPLOY=2025-04-19T03:30:00Z
 # This file is used to trigger deployments to DigitalOcean Deployment triggered at Tue Apr 15 21:06:17 PDT 2025
 Deployment triggered with pnpm changes at Tue Apr 15 21:15:15 PDT 2025
 Deployment triggered with pnpm changes at Tue Apr 15 21:15:48 PDT 2025
@@ -14,3 +14,5 @@ Deployment triggered with medusa-config fix at Tue Apr 15 21:44:12 PDT 2025
 Deployment triggered after complete Docker cleanup at Tue Apr 15 21:52:14 PDT 2025
 Deployment triggered with ts-node fix at Tue Apr 15 21:58:40 PDT 2025
 Deployment triggered with simple Express server at Tue Apr 15 22:06:44 PDT 2025
+Reset to previous commit at Tue Apr 15 22:14:46 PDT 2025
+Deployment triggered after local Docker testing at Fri Apr 19 03:30:00 PDT 2025
